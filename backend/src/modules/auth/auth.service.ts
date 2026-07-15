@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
@@ -16,7 +16,7 @@ export class AuthService {
   ) {}
 
   async wechatLogin(dto: WechatLoginDto, ip?: string, userAgent?: string) {
-    const wxIdentity = await this.exchangeWechatCode(dto.code);
+    const wxIdentity = await this.exchangeWechatCode(dto.code, dto.deviceId);
     const account = await this.prisma.account.upsert({
       where: { openid: wxIdentity.openid },
       update: {
@@ -33,7 +33,8 @@ export class AuthService {
           create: [{ roleCode: RoleCode.PARENT }, { roleCode: RoleCode.TEACHER }]
         },
         parentProfile: { create: {} },
-        teacherProfile: { create: {} }
+        teacherProfile: { create: {} },
+        preference: { create: {} }
       },
       include: { roles: true, teacherProfile: true, parentProfile: true }
     });
@@ -168,14 +169,17 @@ export class AuthService {
     );
   }
 
-  private async exchangeWechatCode(code: string): Promise<{ openid: string; unionid?: string }> {
+  private async exchangeWechatCode(code: string, deviceId?: string): Promise<{ openid: string; unionid?: string }> {
     const appid = this.config.get<string>("WECHAT_APP_ID");
     const secret = this.config.get<string>("WECHAT_APP_SECRET");
     const mock = this.config.get<string>("WECHAT_LOGIN_MOCK") === "true";
-    if (mock || !secret) {
-      return { openid: `mock_${this.hash(code).slice(0, 48)}` };
+    if (mock) {
+      return { openid: `mock_${this.hash(deviceId || code).slice(0, 48)}` };
     }
-    const params = new URLSearchParams({ appid: appid || "", secret, js_code: code, grant_type: "authorization_code" });
+    if (!appid || !secret) {
+      throw new ServiceUnavailableException("微信登录配置不完整");
+    }
+    const params = new URLSearchParams({ appid, secret, js_code: code, grant_type: "authorization_code" });
     const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params}`);
     const data = await response.json() as any;
     if (!response.ok || !data.openid) throw new UnauthorizedException(data.errmsg || "微信登录失败");

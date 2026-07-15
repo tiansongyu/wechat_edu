@@ -15,7 +15,7 @@ export const options = {
   }
 };
 
-const baseUrl = __ENV.BASE_URL || "http://localhost:8080";
+const baseUrl = __ENV.BASE_URL || "http://localhost:4000";
 
 export default function () {
   const response = http.post(

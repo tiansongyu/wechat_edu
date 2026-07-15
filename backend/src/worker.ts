@@ -18,41 +18,68 @@ const worker = new Worker(
   async (job) => {
     const event = await prisma.outboxEvent.findUnique({ where: { id: job.data.eventId } });
     if (!event || event.status === OutboxStatus.PUBLISHED) return;
+    const claimed = await prisma.outboxEvent.updateMany({
+      where: { id: event.id, status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] } },
+      data: { status: OutboxStatus.PROCESSING, attempts: { increment: 1 }, lastError: null }
+    });
+    if (!claimed.count) return;
     const payload = event.payload as Record<string, string | null>;
     try {
+      const notify = async (accountId: string, title: string, content: string, data: Record<string, string | null>) => {
+        const preference = await prisma.userPreference.findUnique({ where: { accountId }, select: { jobNotice: true } });
+        if (preference?.jobNotice === false) return;
+        await prisma.notification.upsert({
+          where: { sourceEventId: event.id },
+          update: {},
+          create: { accountId, type: event.aggregateType === "Appointment" ? "SYSTEM" : "APPLICATION", title, content, data, sourceEventId: event.id }
+        });
+      };
       if (event.eventType === "application.created" && payload.ownerId) {
-        await prisma.notification.create({
-          data: {
-            accountId: payload.ownerId,
-            type: "APPLICATION",
-            title: "收到新的老师报名",
-            content: "你的家教需求收到一份新的报名，请及时处理。",
-            data: { applicationId: payload.applicationId, jobId: payload.jobId }
-          }
+        await notify(payload.ownerId, "收到新的老师报名", "你的家教需求收到一份新的报名，请及时处理。", {
+          applicationId: payload.applicationId,
+          jobId: payload.jobId
         });
       }
       if ((event.eventType === "application.accepted" || event.eventType === "application.rejected") && payload.teacherId) {
         const accepted = event.eventType === "application.accepted";
-        await prisma.notification.create({
-          data: {
-            accountId: payload.teacherId,
-            type: "APPLICATION",
-            title: accepted ? "报名已被接受" : "报名结果已更新",
-            content: accepted ? "家长已接受你的报名，请进入消息中心继续沟通。" : "本次报名未被选中，可以继续查看其他需求。",
-            data: { applicationId: payload.applicationId, jobId: payload.jobId }
-          }
-        });
+        await notify(
+          payload.teacherId,
+          accepted ? "报名已被接受" : "报名结果已更新",
+          accepted ? "家长已接受你的报名，请进入消息中心继续沟通。" : payload.note || "本次报名未被选中，可以继续查看其他需求。",
+          { applicationId: payload.applicationId, jobId: payload.jobId }
+        );
+      }
+      if (event.eventType === "application.cancelled") {
+        const recipient = payload.actorId === payload.teacherId ? payload.ownerId : payload.teacherId;
+        if (recipient) {
+          await notify(recipient, "报名已取消", payload.note || "一条报名记录已被取消。", {
+            applicationId: payload.applicationId,
+            jobId: payload.jobId
+          });
+        }
+      }
+      if (event.eventType.startsWith("appointment.")) {
+        const recipient = payload.actorId === payload.teacherId ? payload.ownerId : payload.teacherId;
+        if (recipient) {
+          const labels: Record<string, [string, string]> = {
+            "appointment.confirmed": ["预约已确认", "教师已确认本次预约。"],
+            "appointment.completed": ["预约已完成", "本次预约已标记完成。"],
+            "appointment.cancelled": ["预约已取消", payload.reason || "本次预约已取消。"],
+            "appointment.disputed": ["预约产生争议", payload.reason || "对方针对本次预约发起了争议。"]
+          };
+          const [title, content] = labels[event.eventType] || ["预约状态已更新", "预约状态发生变化，请及时查看。"];
+          await notify(recipient, title, content, { appointmentId: payload.appointmentId, jobId: payload.jobId });
+        }
       }
       await prisma.outboxEvent.update({
         where: { id: event.id },
-        data: { status: OutboxStatus.PUBLISHED, processedAt: new Date(), attempts: { increment: 1 }, lastError: null }
+        data: { status: OutboxStatus.PUBLISHED, processedAt: new Date(), lastError: null }
       });
     } catch (error) {
       await prisma.outboxEvent.update({
         where: { id: event.id },
         data: {
           status: OutboxStatus.FAILED,
-          attempts: { increment: 1 },
           lastError: error instanceof Error ? error.message.slice(0, 1000) : "Unknown worker error",
           availableAt: new Date(Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(event.attempts, 6)))
         }
@@ -75,7 +102,7 @@ async function dispatchOutbox() {
   });
   for (const event of events) {
     await queue.add(event.eventType, { eventId: event.id }, {
-      jobId: event.id,
+      jobId: `${event.id}-${event.attempts}`,
       attempts: 5,
       backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: 1000,

@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min } from "class-validator";
 
 export class UpdateTeacherProfileDto {
   @IsOptional() @IsString() @MaxLength(64) realName?: string;
@@ -21,5 +21,6 @@ export class UpdateParentProfileDto {
 
 export class AddCertificationDto {
   @IsString() @MaxLength(64) type: string;
-  @IsUrl({ require_tld: false }) @MaxLength(500) fileUrl: string;
+  @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) fileUrl?: string;
+  @IsOptional() @IsString() @MaxLength(500) @Matches(/^private\/[a-zA-Z0-9-]+\/.+/) objectKey?: string;
 }

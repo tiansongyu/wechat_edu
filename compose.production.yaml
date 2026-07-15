@@ -10,7 +10,8 @@ services:
   api:
     environment:
       NODE_ENV: production
-      WECHAT_LOGIN_MOCK: ${WECHAT_LOGIN_MOCK:-false}
+      WECHAT_LOGIN_MOCK: "false"
+      SEED_DEMO_DATA: "false"
     deploy:
       replicas: 2
       resources:
@@ -24,6 +25,7 @@ services:
   worker:
     environment:
       NODE_ENV: production
+      SEED_DEMO_DATA: "false"
     deploy:
       resources:
         limits:
@@ -45,4 +47,5 @@ services:
   migrate:
     environment:
       NODE_ENV: production
-      WECHAT_LOGIN_MOCK: ${WECHAT_LOGIN_MOCK:-false}
+      WECHAT_LOGIN_MOCK: "false"
+      SEED_DEMO_DATA: "false"

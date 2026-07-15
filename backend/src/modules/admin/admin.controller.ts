@@ -1,11 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { RequestUser } from "../../common/interfaces/request-user";
 import { RoleCode } from "../../generated/prisma/enums";
 import { AdminService } from "./admin.service";
-import { AdminListDto, AuditDecisionDto, UpdateAccountStatusDto } from "./dto/admin.dto";
+import {
+  AdminApplicationListDto,
+  AdminApplicationStatusDto,
+  AdminAppointmentListDto,
+  AdminAppointmentStatusDto,
+  AdminListDto,
+  AuditDecisionDto,
+  UpdateAccountStatusDto
+} from "./dto/admin.dto";
 
 @ApiTags("管理后台")
 @ApiBearerAuth()
@@ -27,7 +35,7 @@ export class AdminController {
   @Patch("users/:id/status")
   updateUserStatus(
     @CurrentUser() actor: RequestUser,
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateAccountStatusDto
   ) {
     return this.admin.updateUserStatus(actor.id, id, dto);
@@ -41,7 +49,7 @@ export class AdminController {
   @Patch("teachers/:id/audit")
   auditTeacher(
     @CurrentUser() actor: RequestUser,
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: AuditDecisionDto
   ) {
     return this.admin.auditTeacher(actor.id, id, dto);
@@ -55,10 +63,38 @@ export class AdminController {
   @Patch("jobs/:id/audit")
   auditJob(
     @CurrentUser() actor: RequestUser,
-    @Param("id") id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: AuditDecisionDto
   ) {
     return this.admin.auditJob(actor.id, id, dto);
+  }
+
+  @Get("applications")
+  applications(@Query() query: AdminApplicationListDto) {
+    return this.admin.applications(query);
+  }
+
+  @Patch("applications/:id/status")
+  updateApplicationStatus(
+    @CurrentUser() actor: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: AdminApplicationStatusDto
+  ) {
+    return this.admin.updateApplicationStatus(actor.id, id, dto);
+  }
+
+  @Get("appointments")
+  appointments(@Query() query: AdminAppointmentListDto) {
+    return this.admin.appointments(query);
+  }
+
+  @Patch("appointments/:id/status")
+  updateAppointmentStatus(
+    @CurrentUser() actor: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: AdminAppointmentStatusDto
+  ) {
+    return this.admin.updateAppointmentStatus(actor.id, id, dto);
   }
 
   @Get("audit-logs")

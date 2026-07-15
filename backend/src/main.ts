@@ -14,7 +14,7 @@ async function bootstrap() {
 
   await app.register(helmet, { contentSecurityPolicy: false });
   app.enableCors({
-    origin: (process.env.CORS_ORIGINS || "http://localhost:8080")
+    origin: (process.env.CORS_ORIGINS || "http://localhost:4000")
       .split(",")
       .map((item) => item.trim()),
     credentials: true

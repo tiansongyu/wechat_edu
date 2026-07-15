@@ -7,7 +7,10 @@ import { PrismaClient } from "../generated/prisma/client";
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor(config: ConfigService) {
     const connectionString = config.getOrThrow<string>("DATABASE_URL");
-    super({ adapter: new PrismaPg({ connectionString }) });
+    super({
+      adapter: new PrismaPg({ connectionString }),
+      omit: { jobPost: { contactEncrypted: true } }
+    });
   }
 
   async onModuleInit() {

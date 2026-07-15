@@ -68,30 +68,31 @@ enum OutboxStatus {
 }
 
 model Account {
-  id              String        @id @default(uuid()) @db.Uuid
-  openid          String?       @unique @db.VarChar(128)
-  unionid         String?       @unique @db.VarChar(128)
-  username        String?       @unique @db.VarChar(64)
-  passwordHash    String?       @db.VarChar(255)
-  nickname        String        @default("微信用户") @db.VarChar(80)
-  avatarUrl       String?       @db.VarChar(500)
-  phoneEncrypted  String?       @db.Text
-  phoneHash       String?       @db.VarChar(128)
-  status          AccountStatus @default(ACTIVE)
-  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  id              String               @id @default(uuid()) @db.Uuid
+  openid          String?              @unique @db.VarChar(128)
+  unionid         String?              @unique @db.VarChar(128)
+  username        String?              @unique @db.VarChar(64)
+  passwordHash    String?              @db.VarChar(255)
+  nickname        String               @default("微信用户") @db.VarChar(80)
+  avatarUrl       String?              @db.VarChar(500)
+  phoneEncrypted  String?              @db.Text
+  phoneHash       String?              @db.VarChar(128)
+  status          AccountStatus        @default(ACTIVE)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @db.Timestamptz(3)
   roles           AccountRole[]
   parentProfile   ParentProfile?
   teacherProfile  TeacherProfile?
   jobs            JobPost[]
-  applications    Application[] @relation("TeacherApplications")
+  applications    Application[]        @relation("TeacherApplications")
   favorites       Favorite[]
   sessions        RefreshSession[]
   notifications   Notification[]
   memberships     ConversationMember[]
   sentMessages    Message[]
-  auditLogs       AuditLog[]     @relation("AuditActor")
+  auditLogs       AuditLog[]           @relation("AuditActor")
   idempotencyKeys IdempotencyRecord[]
+  preference      UserPreference?
 
   @@map("accounts")
 }
@@ -130,73 +131,75 @@ model ParentProfile {
 }
 
 model TeacherProfile {
-  accountId       String                 @id @db.Uuid
-  realName        String?                @db.VarChar(64)
-  bio             String?                @db.Text
-  school          String?                @db.VarChar(128)
-  major           String?                @db.VarChar(128)
-  education       String?                @db.VarChar(64)
-  teachingYears   Int                    @default(0)
-  hourlyRateCents Int?
-  subjects        String[]               @default([])
-  serviceDistricts String[]              @default([])
-  auditStatus     AuditStatus            @default(PENDING)
-  auditNote       String?                @db.VarChar(500)
-  score           Int                    @default(60)
-  version         Int                    @default(1)
-  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
-  account         Account                @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  certifications  TeacherCertification[]
+  accountId        String                 @id @db.Uuid
+  realName         String?                @db.VarChar(64)
+  bio              String?                @db.Text
+  school           String?                @db.VarChar(128)
+  major            String?                @db.VarChar(128)
+  education        String?                @db.VarChar(64)
+  teachingYears    Int                    @default(0)
+  hourlyRateCents  Int?
+  subjects         String[]               @default([])
+  serviceDistricts String[]               @default([])
+  auditStatus      AuditStatus            @default(PENDING)
+  auditNote        String?                @db.VarChar(500)
+  submittedAt      DateTime?              @db.Timestamptz(3)
+  score            Int                    @default(60)
+  version          Int                    @default(1)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+  account          Account                @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  certifications   TeacherCertification[]
 
   @@index([auditStatus, createdAt])
   @@map("teacher_profiles")
 }
 
 model TeacherCertification {
-  id         String      @id @default(uuid()) @db.Uuid
-  teacherId  String      @db.Uuid
-  type       String      @db.VarChar(64)
-  fileUrl    String      @db.VarChar(500)
-  auditStatus AuditStatus @default(PENDING)
-  auditNote  String?     @db.VarChar(500)
-  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
-  teacher    TeacherProfile @relation(fields: [teacherId], references: [accountId], onDelete: Cascade)
+  id          String         @id @default(uuid()) @db.Uuid
+  teacherId   String         @db.Uuid
+  type        String         @db.VarChar(64)
+  fileUrl     String?        @db.VarChar(500)
+  objectKey   String?        @db.VarChar(500)
+  auditStatus AuditStatus    @default(PENDING)
+  auditNote   String?        @db.VarChar(500)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [accountId], onDelete: Cascade)
 
   @@index([auditStatus, createdAt])
   @@map("teacher_certifications")
 }
 
 model JobPost {
-  id               String        @id @default(uuid()) @db.Uuid
-  ownerId          String        @db.Uuid
+  id               String                                 @id @default(uuid()) @db.Uuid
+  ownerId          String                                 @db.Uuid
   type             JobType
-  title            String        @db.VarChar(120)
-  district         String        @db.VarChar(64)
-  area             String?       @db.VarChar(128)
-  grade            String        @db.VarChar(64)
-  subject          String        @db.VarChar(64)
+  title            String                                 @db.VarChar(120)
+  district         String                                 @db.VarChar(64)
+  area             String?                                @db.VarChar(128)
+  grade            String                                 @db.VarChar(64)
+  subject          String                                 @db.VarChar(64)
   priceCents       Int
-  priceUnit        String        @default("小时") @db.VarChar(32)
-  settlement       String        @default("课结") @db.VarChar(32)
-  schedule         String        @db.VarChar(255)
-  description      String        @db.Text
-  studentInfo      String?       @db.VarChar(500)
-  address          String?       @db.VarChar(255)
-  contactEncrypted String?       @db.Text
-  latitude         Decimal?      @db.Decimal(10, 7)
-  longitude        Decimal?      @db.Decimal(10, 7)
+  priceUnit        String                                 @default("小时") @db.VarChar(32)
+  settlement       String                                 @default("课结") @db.VarChar(32)
+  schedule         String                                 @db.VarChar(255)
+  description      String                                 @db.Text
+  studentInfo      String?                                @db.VarChar(500)
+  address          String?                                @db.VarChar(255)
+  contactEncrypted String?                                @db.Text
+  latitude         Decimal?                               @db.Decimal(10, 7)
+  longitude        Decimal?                               @db.Decimal(10, 7)
   location         Unsupported("geography(Point, 4326)")?
-  status           JobStatus     @default(PENDING)
-  capacity         Int           @default(1)
-  applicationCount Int           @default(0)
-  version          Int           @default(1)
-  auditNote        String?       @db.VarChar(500)
-  publishedAt      DateTime?     @db.Timestamptz(3)
-  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
-  owner            Account       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  status           JobStatus                              @default(PENDING)
+  capacity         Int                                    @default(1)
+  applicationCount Int                                    @default(0)
+  version          Int                                    @default(1)
+  auditNote        String?                                @db.VarChar(500)
+  publishedAt      DateTime?                              @db.Timestamptz(3)
+  createdAt        DateTime                               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                               @updatedAt @db.Timestamptz(3)
+  owner            Account                                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   applications     Application[]
   favorites        Favorite[]
   appointments     Appointment[]
@@ -212,6 +215,7 @@ model Application {
   teacherId   String            @db.Uuid
   coverLetter String?           @db.VarChar(1000)
   status      ApplicationStatus @default(PENDING)
+  statusNote  String?           @db.VarChar(1000)
   version     Int               @default(1)
   handledAt   DateTime?         @db.Timestamptz(3)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
@@ -233,6 +237,9 @@ model Appointment {
   status        AppointmentStatus @default(PENDING)
   startAt       DateTime?         @db.Timestamptz(3)
   note          String?           @db.VarChar(1000)
+  statusNote    String?           @db.VarChar(1000)
+  version       Int               @default(1)
+  handledAt     DateTime?         @db.Timestamptz(3)
   createdAt     DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
   job           JobPost           @relation(fields: [jobId], references: [id], onDelete: Restrict)
@@ -278,14 +285,14 @@ model ConversationMember {
 }
 
 model Message {
-  id             String       @id @default(uuid()) @db.Uuid
-  conversationId String       @db.Uuid
-  senderId       String       @db.Uuid
-  clientMessageId String      @db.Uuid
-  content        String       @db.Text
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         Account      @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  id              String       @id @default(uuid()) @db.Uuid
+  conversationId  String       @db.Uuid
+  senderId        String       @db.Uuid
+  clientMessageId String       @db.Uuid
+  content         String       @db.Text
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          Account      @relation(fields: [senderId], references: [id], onDelete: Restrict)
 
   @@unique([conversationId, senderId, clientMessageId])
   @@index([conversationId, createdAt(sort: Desc), id])
@@ -293,31 +300,44 @@ model Message {
 }
 
 model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  accountId String           @db.Uuid
-  type      NotificationType
-  title     String           @db.VarChar(120)
-  content   String           @db.VarChar(1000)
-  data      Json?
-  readAt    DateTime?        @db.Timestamptz(3)
-  createdAt DateTime         @default(now()) @db.Timestamptz(3)
-  account   Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id            String           @id @default(uuid()) @db.Uuid
+  accountId     String           @db.Uuid
+  type          NotificationType
+  title         String           @db.VarChar(120)
+  content       String           @db.VarChar(1000)
+  data          Json?
+  sourceEventId String?          @unique @db.Uuid
+  readAt        DateTime?        @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  account       Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, readAt, createdAt(sort: Desc)])
   @@map("notifications")
 }
 
-model RefreshSession {
-  id          String   @id @default(uuid()) @db.Uuid
-  accountId   String   @db.Uuid
-  tokenHash   String   @db.VarChar(128)
-  userAgent   String?  @db.VarChar(500)
-  ipAddress   String?  @db.VarChar(64)
-  expiresAt   DateTime @db.Timestamptz(3)
-  revokedAt   DateTime? @db.Timestamptz(3)
+model UserPreference {
+  accountId   String   @id @db.Uuid
+  jobNotice   Boolean  @default(true)
+  chatNotice  Boolean  @default(true)
+  privacyMode Boolean  @default(true)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
   account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @db.Uuid
+  tokenHash String    @db.VarChar(128)
+  userAgent String?   @db.VarChar(500)
+  ipAddress String?   @db.VarChar(64)
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, expiresAt])
   @@map("refresh_sessions")
@@ -339,17 +359,17 @@ model IdempotencyRecord {
 }
 
 model OutboxEvent {
-  id          String       @id @default(uuid()) @db.Uuid
-  aggregateType String     @db.VarChar(80)
-  aggregateId String       @db.Uuid
-  eventType   String       @db.VarChar(120)
-  payload     Json
-  status      OutboxStatus @default(PENDING)
-  attempts    Int          @default(0)
-  availableAt DateTime     @default(now()) @db.Timestamptz(3)
-  processedAt DateTime?    @db.Timestamptz(3)
-  lastError   String?      @db.VarChar(1000)
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  id            String       @id @default(uuid()) @db.Uuid
+  aggregateType String       @db.VarChar(80)
+  aggregateId   String       @db.Uuid
+  eventType     String       @db.VarChar(120)
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime?    @db.Timestamptz(3)
+  lastError     String?      @db.VarChar(1000)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([status, availableAt, createdAt])
   @@map("outbox_events")

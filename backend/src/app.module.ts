@@ -12,10 +12,20 @@ import { ApplicationsModule } from "./modules/applications/applications.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { CommunicationsModule } from "./modules/communications/communications.module";
 import { FilesModule } from "./modules/files/files.module";
+import { PreferencesModule } from "./modules/preferences/preferences.module";
+import { AppointmentsModule } from "./modules/appointments/appointments.module";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: (config) => {
+        if (config.WECHAT_LOGIN_MOCK !== "true" && (!config.WECHAT_APP_ID || !config.WECHAT_APP_SECRET)) {
+          throw new Error("WECHAT_APP_ID and WECHAT_APP_SECRET are required when WECHAT_LOGIN_MOCK is not true");
+        }
+        return config;
+      }
+    }),
     PrismaModule,
     AuthModule,
     ProfilesModule,
@@ -23,7 +33,9 @@ import { FilesModule } from "./modules/files/files.module";
     ApplicationsModule,
     AdminModule,
     CommunicationsModule,
-    FilesModule
+    FilesModule,
+    PreferencesModule,
+    AppointmentsModule
   ],
   controllers: [HealthController],
   providers: [

@@ -1,8 +1,17 @@
-import { IsString, IsUUID, MaxLength } from "class-validator";
+import { IsOptional, IsString, IsUUID, Matches, MaxLength } from "class-validator";
+
+export class ListMessagesDto {
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
+}
 
 export class StartConversationDto {
   @IsUUID()
   memberId: string;
+
+  @IsUUID()
+  jobId: string;
 }
 
 export class SendMessageDto {
@@ -10,6 +19,7 @@ export class SendMessageDto {
   clientMessageId: string;
 
   @IsString()
+  @Matches(/\S/)
   @MaxLength(3000)
   content: string;
 }

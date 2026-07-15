@@ -21,20 +21,32 @@ async function main() {
     prisma.role.upsert({ where: { code: RoleCode.ADMIN }, update: {}, create: { code: RoleCode.ADMIN, name: "管理员" } })
   ]);
 
-  const adminPassword = await argon2.hash(process.env.ADMIN_PASSWORD || "Admin123456!", { type: argon2.argon2id });
-  await prisma.account.upsert({
-    where: { id: ADMIN_ID },
-    update: { username: process.env.ADMIN_USERNAME || "admin", passwordHash: adminPassword },
-    create: {
-      id: ADMIN_ID,
-      username: process.env.ADMIN_USERNAME || "admin",
-      passwordHash: adminPassword,
-      nickname: "系统管理员",
-      roles: { create: [{ roleCode: RoleCode.ADMIN }] }
-    }
+  const adminUsername = process.env.ADMIN_USERNAME || "admin";
+  const existingAdmin = await prisma.account.findFirst({
+    where: { OR: [{ id: ADMIN_ID }, { username: adminUsername }] },
+    select: { id: true }
   });
+  if (!existingAdmin) {
+    const adminPassword = await argon2.hash(process.env.ADMIN_PASSWORD || "Admin123456!", { type: argon2.argon2id });
+    await prisma.account.create({
+      data: {
+        id: ADMIN_ID,
+        username: adminUsername,
+        passwordHash: adminPassword,
+        nickname: "系统管理员",
+        roles: { create: [{ roleCode: RoleCode.ADMIN }] }
+      }
+    });
+  } else {
+    await prisma.accountRole.upsert({
+      where: { accountId_roleCode: { accountId: existingAdmin.id, roleCode: RoleCode.ADMIN } },
+      update: {},
+      create: { accountId: existingAdmin.id, roleCode: RoleCode.ADMIN }
+    });
+  }
 
-  await prisma.account.upsert({
+  if (process.env.SEED_DEMO_DATA === "true") {
+    await prisma.account.upsert({
     where: { id: PARENT_ID },
     update: {},
     create: {
@@ -46,7 +58,7 @@ async function main() {
     }
   });
 
-  await prisma.account.upsert({
+    await prisma.account.upsert({
     where: { id: TEACHER_ID },
     update: {},
     create: {
@@ -66,13 +78,14 @@ async function main() {
           subjects: ["数学"],
           serviceDistricts: ["南山区", "福田区"],
           auditStatus: AuditStatus.APPROVED,
+          submittedAt: new Date(),
           score: 92
         }
       }
     }
   });
 
-  await prisma.jobPost.upsert({
+    await prisma.jobPost.upsert({
     where: { id: JOB_ID },
     update: {},
     create: {
@@ -98,7 +111,7 @@ async function main() {
     }
   });
 
-  await prisma.jobPost.upsert({
+    await prisma.jobPost.upsert({
     where: { id: OFFER_ID },
     update: {},
     create: {
@@ -123,9 +136,10 @@ async function main() {
     }
   });
 
-  await prisma.$executeRawUnsafe(
-    `UPDATE job_posts SET location = ST_SetSRID(ST_MakePoint("longitude"::double precision, "latitude"::double precision), 4326)::geography WHERE "longitude" IS NOT NULL AND "latitude" IS NOT NULL`
-  );
+    await prisma.$executeRawUnsafe(
+      `UPDATE job_posts SET location = ST_SetSRID(ST_MakePoint("longitude"::double precision, "latitude"::double precision), 4326)::geography WHERE "longitude" IS NOT NULL AND "latitude" IS NOT NULL`
+    );
+  }
   await prisma.systemSetting.upsert({
     where: { key: "platform" },
     update: {},

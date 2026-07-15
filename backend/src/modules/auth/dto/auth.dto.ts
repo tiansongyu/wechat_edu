@@ -1,10 +1,15 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length } from "class-validator";
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from "class-validator";
 import { RoleCode } from "../../../generated/prisma/enums";
 
 export class WechatLoginDto {
   @IsString()
   @IsNotEmpty()
   code: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  deviceId?: string;
 
   @IsOptional()
   @IsString()

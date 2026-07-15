@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-const baseUrl = process.env.BASE_URL || "http://127.0.0.1:8080";
+const baseUrl = process.env.BASE_URL || "http://127.0.0.1:4000";
 
 async function request(path, { token, method = "GET", body, headers = {} } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -41,12 +41,12 @@ const upload = await request("/api/v1/files/upload-url", {
   token: teacher.accessToken,
   body: { fileName: "teacher-proof.pdf", contentType: "application/pdf", size: 1024 }
 });
-assert.match(upload.uploadUrl, /^http:\/\/127\.0\.0\.1:9000\//);
+assert.match(upload.uploadUrl, /^http:\/\/127\.0\.0\.1:4003\//);
 assert.equal(upload.expiresIn, 600);
 const uploadResponse = await fetch(upload.uploadUrl, {
   method: "PUT",
   headers: { "content-type": "application/pdf" },
-  body: new TextEncoder().encode("Tutor Link E2E teacher certification")
+  body: new TextEncoder().encode("%PDF-1.4\n% Tutor Link E2E teacher certification\n")
 });
 assert.equal(uploadResponse.status, 200);
 const certification = await request("/api/v1/profiles/teacher/certifications", {

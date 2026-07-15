@@ -11,7 +11,7 @@ export class RolesGuard implements CanActivate {
     const required = this.reflector.getAllAndOverride<RoleCode[]>(ROLES_KEY, [context.getHandler(), context.getClass()]);
     if (!required?.length) return true;
     const user = context.switchToHttp().getRequest().user;
-    if (user && required.some((role) => user.roles.includes(role))) return true;
+    if (user && user.roles.includes(user.activeRole) && required.includes(user.activeRole)) return true;
     throw new ForbiddenException("当前账号没有执行此操作的权限");
   }
 }
