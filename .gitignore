@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+miniprogram_npm/
+dist/
+project.private.config.json
+*.log
+.env
+.env.*
+!.env.example
+coverage/
+backend/src/generated/
+admin-web/.vite/
+data/
+*.tsbuildinfo

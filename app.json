@@ -1,0 +1,20 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/map/map",
+    "pages/publish/publish",
+    "pages/messages/messages",
+    "pages/profile/profile",
+    "pages/teacher-profile/teacher-profile",
+    "pages/job-detail/job-detail"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#f6f7fb",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "家教直聘",
+    "backgroundColor": "#f6f7fb",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

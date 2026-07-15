@@ -1,0 +1,48 @@
+services:
+  gateway:
+    ports: !override
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+
+  api:
+    environment:
+      NODE_ENV: production
+      WECHAT_LOGIN_MOCK: ${WECHAT_LOGIN_MOCK:-false}
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  worker:
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  migrate:
+    environment:
+      NODE_ENV: production
+      WECHAT_LOGIN_MOCK: ${WECHAT_LOGIN_MOCK:-false}

@@ -1,0 +1,381 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleCode {
+  PARENT
+  TEACHER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum AuditStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JobType {
+  TEACHING_NEED
+  TEACHER_OFFER
+}
+
+enum JobStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  CLOSED
+  REJECTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum NotificationType {
+  APPLICATION
+  AUDIT
+  CHAT
+  SYSTEM
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+model Account {
+  id              String        @id @default(uuid()) @db.Uuid
+  openid          String?       @unique @db.VarChar(128)
+  unionid         String?       @unique @db.VarChar(128)
+  username        String?       @unique @db.VarChar(64)
+  passwordHash    String?       @db.VarChar(255)
+  nickname        String        @default("微信用户") @db.VarChar(80)
+  avatarUrl       String?       @db.VarChar(500)
+  phoneEncrypted  String?       @db.Text
+  phoneHash       String?       @db.VarChar(128)
+  status          AccountStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  roles           AccountRole[]
+  parentProfile   ParentProfile?
+  teacherProfile  TeacherProfile?
+  jobs            JobPost[]
+  applications    Application[] @relation("TeacherApplications")
+  favorites       Favorite[]
+  sessions        RefreshSession[]
+  notifications   Notification[]
+  memberships     ConversationMember[]
+  sentMessages    Message[]
+  auditLogs       AuditLog[]     @relation("AuditActor")
+  idempotencyKeys IdempotencyRecord[]
+
+  @@map("accounts")
+}
+
+model Role {
+  code        RoleCode      @id
+  name        String        @db.VarChar(32)
+  description String?       @db.VarChar(255)
+  accounts    AccountRole[]
+
+  @@map("roles")
+}
+
+model AccountRole {
+  accountId String   @db.Uuid
+  roleCode  RoleCode
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleCode], references: [code], onDelete: Restrict)
+
+  @@id([accountId, roleCode])
+  @@index([roleCode])
+  @@map("account_roles")
+}
+
+model ParentProfile {
+  accountId String   @id @db.Uuid
+  city      String?  @db.VarChar(64)
+  district  String?  @db.VarChar(64)
+  address   String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("parent_profiles")
+}
+
+model TeacherProfile {
+  accountId       String                 @id @db.Uuid
+  realName        String?                @db.VarChar(64)
+  bio             String?                @db.Text
+  school          String?                @db.VarChar(128)
+  major           String?                @db.VarChar(128)
+  education       String?                @db.VarChar(64)
+  teachingYears   Int                    @default(0)
+  hourlyRateCents Int?
+  subjects        String[]               @default([])
+  serviceDistricts String[]              @default([])
+  auditStatus     AuditStatus            @default(PENDING)
+  auditNote       String?                @db.VarChar(500)
+  score           Int                    @default(60)
+  version         Int                    @default(1)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
+  account         Account                @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  certifications  TeacherCertification[]
+
+  @@index([auditStatus, createdAt])
+  @@map("teacher_profiles")
+}
+
+model TeacherCertification {
+  id         String      @id @default(uuid()) @db.Uuid
+  teacherId  String      @db.Uuid
+  type       String      @db.VarChar(64)
+  fileUrl    String      @db.VarChar(500)
+  auditStatus AuditStatus @default(PENDING)
+  auditNote  String?     @db.VarChar(500)
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+  teacher    TeacherProfile @relation(fields: [teacherId], references: [accountId], onDelete: Cascade)
+
+  @@index([auditStatus, createdAt])
+  @@map("teacher_certifications")
+}
+
+model JobPost {
+  id               String        @id @default(uuid()) @db.Uuid
+  ownerId          String        @db.Uuid
+  type             JobType
+  title            String        @db.VarChar(120)
+  district         String        @db.VarChar(64)
+  area             String?       @db.VarChar(128)
+  grade            String        @db.VarChar(64)
+  subject          String        @db.VarChar(64)
+  priceCents       Int
+  priceUnit        String        @default("小时") @db.VarChar(32)
+  settlement       String        @default("课结") @db.VarChar(32)
+  schedule         String        @db.VarChar(255)
+  description      String        @db.Text
+  studentInfo      String?       @db.VarChar(500)
+  address          String?       @db.VarChar(255)
+  contactEncrypted String?       @db.Text
+  latitude         Decimal?      @db.Decimal(10, 7)
+  longitude        Decimal?      @db.Decimal(10, 7)
+  location         Unsupported("geography(Point, 4326)")?
+  status           JobStatus     @default(PENDING)
+  capacity         Int           @default(1)
+  applicationCount Int           @default(0)
+  version          Int           @default(1)
+  auditNote        String?       @db.VarChar(500)
+  publishedAt      DateTime?     @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+  owner            Account       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  applications     Application[]
+  favorites        Favorite[]
+  appointments     Appointment[]
+
+  @@index([status, type, district, subject, publishedAt(sort: Desc)])
+  @@index([ownerId, status, createdAt(sort: Desc)])
+  @@map("job_posts")
+}
+
+model Application {
+  id          String            @id @default(uuid()) @db.Uuid
+  jobId       String            @db.Uuid
+  teacherId   String            @db.Uuid
+  coverLetter String?           @db.VarChar(1000)
+  status      ApplicationStatus @default(PENDING)
+  version     Int               @default(1)
+  handledAt   DateTime?         @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+  job         JobPost           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  teacher     Account           @relation("TeacherApplications", fields: [teacherId], references: [id], onDelete: Restrict)
+  appointment Appointment?
+
+  @@unique([jobId, teacherId])
+  @@index([teacherId, status, createdAt(sort: Desc)])
+  @@index([jobId, status, createdAt(sort: Desc)])
+  @@map("applications")
+}
+
+model Appointment {
+  id            String            @id @default(uuid()) @db.Uuid
+  jobId         String            @db.Uuid
+  applicationId String            @unique @db.Uuid
+  status        AppointmentStatus @default(PENDING)
+  startAt       DateTime?         @db.Timestamptz(3)
+  note          String?           @db.VarChar(1000)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+  job           JobPost           @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([jobId, status])
+  @@map("appointments")
+}
+
+model Favorite {
+  accountId String   @db.Uuid
+  jobId     String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  job       JobPost  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, jobId])
+  @@index([jobId])
+  @@map("favorites")
+}
+
+model Conversation {
+  id        String               @id @default(uuid()) @db.Uuid
+  createdAt DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime             @updatedAt @db.Timestamptz(3)
+  members   ConversationMember[]
+  messages  Message[]
+
+  @@map("conversations")
+}
+
+model ConversationMember {
+  conversationId String       @db.Uuid
+  accountId      String       @db.Uuid
+  lastReadAt     DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, accountId])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  senderId       String       @db.Uuid
+  clientMessageId String      @db.Uuid
+  content        String       @db.Text
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         Account      @relation(fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@unique([conversationId, senderId, clientMessageId])
+  @@index([conversationId, createdAt(sort: Desc), id])
+  @@map("messages")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  accountId String           @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(120)
+  content   String           @db.VarChar(1000)
+  data      Json?
+  readAt    DateTime?        @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  account   Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model RefreshSession {
+  id          String   @id @default(uuid()) @db.Uuid
+  accountId   String   @db.Uuid
+  tokenHash   String   @db.VarChar(128)
+  userAgent   String?  @db.VarChar(500)
+  ipAddress   String?  @db.VarChar(64)
+  expiresAt   DateTime @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+  @@map("refresh_sessions")
+}
+
+model IdempotencyRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String   @db.Uuid
+  scope     String   @db.VarChar(80)
+  key       String   @db.VarChar(128)
+  response  Json
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  actor     Account  @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, scope, key])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id          String       @id @default(uuid()) @db.Uuid
+  aggregateType String     @db.VarChar(80)
+  aggregateId String       @db.Uuid
+  eventType   String       @db.VarChar(120)
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  availableAt DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt DateTime?    @db.Timestamptz(3)
+  lastError   String?      @db.VarChar(1000)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([status, availableAt, createdAt])
+  @@map("outbox_events")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String   @db.VarChar(120)
+  targetType String   @db.VarChar(80)
+  targetId   String?  @db.VarChar(128)
+  before     Json?
+  after      Json?
+  ipAddress  String?  @db.VarChar(64)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  actor      Account? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key       String   @id @db.VarChar(120)
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("system_settings")
+}

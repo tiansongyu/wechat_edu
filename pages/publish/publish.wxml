@@ -1,0 +1,153 @@
+<view class="page-with-tabbar publish-page">
+  <view class="publish-hero">
+    <text class="publish-hero__eyebrow">{{roleName}} · 让靠谱的人更快遇见</text>
+    <text class="publish-hero__title">{{activeRole === 'TEACHER' ? '发布老师求带' : '发布家教需求'}}</text>
+    <text class="publish-hero__copy">资料仅用于平台匹配，联系方式默认隐藏</text>
+    <view class="publish-hero__shield">✓</view>
+  </view>
+
+  <view class="publish-content">
+    <view class="type-switch">
+      <view class="type-option {{publishType === 'offer' ? 'type-option--active' : ''}}" data-type="offer" bindtap="switchType">
+        <text class="type-option__icon">🎓</text>
+        <view>
+          <text class="type-option__title">发布求带</text>
+          <text class="type-option__copy">我是老师 / 大学生</text>
+        </view>
+      </view>
+      <view class="type-option {{publishType === 'need' ? 'type-option--active' : ''}}" data-type="need" bindtap="switchType">
+        <text class="type-option__icon">⌂</text>
+        <view>
+          <text class="type-option__title">发布家教</text>
+          <text class="type-option__copy">我是家长 / 招聘方</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="form-card">
+      <view class="form-section-head">
+        <view class="form-section-head__number">1</view>
+        <view>
+          <text class="form-section-head__title">基本信息</text>
+          <text class="form-section-head__copy">清晰的标题会获得更多关注</text>
+        </view>
+      </view>
+
+      <view class="form-field">
+        <text class="form-label">标题 <text class="required">*</text></text>
+        <input
+          class="form-input"
+          value="{{form.title}}"
+          maxlength="30"
+          data-field="title"
+          placeholder="例如：高一数学周末辅导"
+          placeholder-class="form-placeholder"
+          bindinput="handleInput"
+        />
+      </view>
+
+      <view class="form-grid">
+        <picker class="form-picker" range="{{districts}}" value="{{districtIndex}}" data-field="district" bindchange="handlePicker">
+          <view class="form-select">
+            <text class="form-select__label">所在区域 *</text>
+            <text class="form-select__value {{form.district ? '' : 'form-select__value--empty'}}">{{form.district || '请选择'}}</text>
+          </view>
+        </picker>
+        <picker class="form-picker" range="{{grades}}" value="{{gradeIndex}}" data-field="grade" bindchange="handlePicker">
+          <view class="form-select">
+            <text class="form-select__label">年级 *</text>
+            <text class="form-select__value {{form.grade ? '' : 'form-select__value--empty'}}">{{form.grade || '请选择'}}</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-grid">
+        <picker class="form-picker" range="{{subjects}}" value="{{subjectIndex}}" data-field="subject" bindchange="handlePicker">
+          <view class="form-select">
+            <text class="form-select__label">科目 *</text>
+            <text class="form-select__value {{form.subject ? '' : 'form-select__value--empty'}}">{{form.subject || '请选择'}}</text>
+          </view>
+        </picker>
+        <view class="form-field form-field--half">
+          <text class="form-label form-label--small">期望课酬 *</text>
+          <view class="price-input-wrap">
+            <text>¥</text>
+            <input class="price-input" value="{{form.price}}" type="number" maxlength="5" data-field="price" placeholder="200" bindinput="handleInput" />
+            <text class="price-input-wrap__unit">/小时</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="form-field">
+        <text class="form-label">可授课时间 <text class="required">*</text></text>
+        <input
+          class="form-input"
+          value="{{form.schedule}}"
+          maxlength="40"
+          data-field="schedule"
+          placeholder="例如：周六、周日 14:00–18:00"
+          placeholder-class="form-placeholder"
+          bindinput="handleInput"
+        />
+      </view>
+    </view>
+
+    <view class="form-card">
+      <view class="form-section-head">
+        <view class="form-section-head__number">2</view>
+        <view>
+          <text class="form-section-head__title">详细说明</text>
+          <text class="form-section-head__copy">介绍经验、要求或学生情况</text>
+        </view>
+      </view>
+
+      <view class="form-field">
+        <textarea
+          class="form-textarea"
+          value="{{form.description}}"
+          maxlength="300"
+          data-field="description"
+          placeholder="请描述教学经验、擅长方向、具体要求等..."
+          placeholder-class="form-placeholder"
+          bindinput="handleInput"
+        ></textarea>
+        <text class="form-count">{{form.description.length || 0}} / 300</text>
+      </view>
+
+      <view class="form-field">
+        <text class="form-label">联系方式 <text class="required">*</text></text>
+        <input
+          class="form-input"
+          value="{{form.contact}}"
+          maxlength="20"
+          data-field="contact"
+          placeholder="手机号或微信号（平台加密保护）"
+          placeholder-class="form-placeholder"
+          bindinput="handleInput"
+        />
+        <text class="privacy-note">🔒 只有匹配成功后双方才可查看</text>
+      </view>
+    </view>
+
+    <button class="submit-button" bindtap="submitForm">提交平台审核</button>
+    <text class="submit-note">提交即代表同意《信息发布规范》</text>
+
+    <view class="my-posts" wx:if="{{posts.length}}">
+      <view class="my-posts__head">
+        <text class="my-posts__title">我的发布</text>
+        <text class="my-posts__count">{{posts.length}} 条</text>
+      </view>
+      <view class="post-card" wx:for="{{posts}}" wx:key="id">
+        <view class="post-card__status">{{item.status}}</view>
+        <text class="post-card__title">{{item.title}}</text>
+        <text class="post-card__meta">{{item.district}} · {{item.grade}} · {{item.subject}} · ¥{{item.price}}/小时</text>
+        <view class="post-card__footer">
+          <text>{{item.createdLabel}}</text>
+          <text class="post-card__remove" data-id="{{item.id}}" bindtap="removePost">撤回</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <app-tabbar current="publish"></app-tabbar>
+</view>

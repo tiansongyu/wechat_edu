@@ -1,0 +1,73 @@
+<view class="page-with-tabbar messages-page">
+  <view class="messages-header">
+    <view>
+      <text class="messages-header__eyebrow">保持沟通，不错过机会</text>
+      <view class="messages-header__title-row">
+        <text class="messages-header__title">消息中心</text>
+        <text class="messages-header__badge" wx:if="{{unreadCount}}">{{unreadCount}}</text>
+      </view>
+    </view>
+    <view class="messages-header__action" bindtap="markAllRead">全部已读</view>
+  </view>
+
+  <view class="message-tools">
+    <view class="message-tool">
+      <view class="message-tool__icon message-tool__icon--blue">⌁</view>
+      <view>
+        <text class="message-tool__title">申请进度</text>
+        <text class="message-tool__copy">1 个审核中</text>
+      </view>
+    </view>
+    <view class="message-tool">
+      <view class="message-tool__icon message-tool__icon--purple">◌</view>
+      <view>
+        <text class="message-tool__title">待回复</text>
+        <text class="message-tool__copy">1 位顾问联系你</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="message-tabs">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="key"
+      class="message-tab {{currentTab === item.key ? 'message-tab--active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="switchTab"
+    >{{item.label}}</view>
+  </view>
+
+  <view class="message-list" wx:if="{{visibleMessages.length}}">
+    <view
+      wx:for="{{visibleMessages}}"
+      wx:key="id"
+      class="message-card {{item.unread ? 'message-card--unread' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="openMessage"
+      hover-class="message-card--pressed"
+    >
+      <view class="message-card__avatar message-card__avatar--{{item.tone}}">{{item.icon}}</view>
+      <view class="message-card__main">
+        <view class="message-card__title-row">
+          <text class="message-card__title">{{item.title}}</text>
+          <text class="message-card__time">{{item.time}}</text>
+        </view>
+        <text class="message-card__content">{{item.content}}</text>
+      </view>
+      <view class="message-card__dot" wx:if="{{item.unread}}"></view>
+    </view>
+  </view>
+
+  <view class="messages-empty" wx:else>
+    <view class="messages-empty__icon">◌</view>
+    <text class="messages-empty__title">这里还没有消息</text>
+    <text class="messages-empty__copy">申请进度和顾问沟通会出现在这里</text>
+  </view>
+
+  <view class="message-safety">
+    <text class="message-safety__icon">✓</text>
+    <text>平台不会在聊天中索要转账或验证码，请注意识别风险。</text>
+  </view>
+
+  <app-tabbar current="messages"></app-tabbar>
+</view>

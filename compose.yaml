@@ -1,0 +1,211 @@
+name: tutor-link
+
+x-build-proxy-args: &build-proxy-args
+  HTTP_PROXY: ${DOCKER_BUILD_PROXY:-}
+  HTTPS_PROXY: ${DOCKER_BUILD_PROXY:-}
+  ALL_PROXY: ${DOCKER_BUILD_PROXY:-}
+  http_proxy: ${DOCKER_BUILD_PROXY:-}
+  https_proxy: ${DOCKER_BUILD_PROXY:-}
+  all_proxy: ${DOCKER_BUILD_PROXY:-}
+
+services:
+  gateway:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      admin-web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [app]
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    environment: &backend-env
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://tutor:tutor_dev_password@pgbouncer:5432/tutor_link?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-access-secret-change-before-production-1234}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-refresh-secret-change-before-production-1234}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-local-data-encryption-secret-change-before-production}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-wx02054be10e52aff0}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      WECHAT_LOGIN_MOCK: ${WECHAT_LOGIN_MOCK:-true}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123456!}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tutor-link}
+      MINIO_REGION: ${MINIO_REGION:-cn-south-1}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1}
+      MINIO_PUBLIC_PORT: ${MINIO_PUBLIC_PORT:-9000}
+      MINIO_PUBLIC_USE_SSL: ${MINIO_PUBLIC_USE_SSL:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [app]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args: *build-proxy-args
+    command: ["node", "dist/worker.js"]
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [app]
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migration
+      args: *build-proxy-args
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run db:seed"]
+    restart: "no"
+    environment:
+      <<: *backend-env
+      DATABASE_URL: ${DIRECT_DATABASE_URL:-postgresql://tutor:tutor_dev_password@postgres:5432/tutor_link?schema=public}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app]
+
+  admin-web:
+    build:
+      context: ./admin-web
+      dockerfile: Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [app]
+
+  postgres:
+    image: postgis/postgis:18-3.6
+    platform: ${POSTGRES_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tutor_link}
+      POSTGRES_USER: ${POSTGRES_USER:-tutor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tutor_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tutor} -d ${POSTGRES_DB:-tutor_link}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [app]
+
+  pgbouncer:
+    image: edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-tutor_link}
+      DB_USER: ${POSTGRES_USER:-tutor}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-tutor_dev_password}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 30
+      RESERVE_POOL_SIZE: 10
+      SERVER_RESET_QUERY: DISCARD ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-tutor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [app]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app]
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [app]
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+
+networks:
+  app:
+    driver: bridge

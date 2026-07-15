@@ -1,0 +1,10 @@
+.git
+.DS_Store
+node_modules
+**/node_modules
+**/dist
+**/coverage
+.env
+project.private.config.json
+data
+*.log

@@ -1,0 +1,78 @@
+<view class="detail-page" wx:if="{{job}}">
+  <view class="detail-hero">
+    <view class="detail-hero__meta">
+      <text class="detail-hero__code">{{job.code}}</text>
+      <text class="detail-hero__location">深圳 · {{job.district}} · {{job.distance}}</text>
+    </view>
+    <text class="detail-hero__title">{{job.title}}</text>
+    <view class="detail-hero__price-row">
+      <view class="detail-hero__price">¥<text>{{job.price}}</text><text class="detail-hero__unit">{{job.unit}}</text></view>
+      <view class="detail-hero__status">{{applied ? '已申请 · 审核中' : '今天可申请'}}</view>
+    </view>
+    <view class="detail-hero__tags">
+      <text>{{job.settlement}}</text>
+      <text>{{job.badge}}</text>
+      <text>{{job.role}}</text>
+    </view>
+  </view>
+
+  <view class="detail-content">
+    <view class="publisher-card">
+      <view class="publisher-card__avatar">东</view>
+      <view class="publisher-card__main">
+        <view class="publisher-card__name-row">
+          <text class="publisher-card__name">{{job.publisher}}</text>
+          <text class="publisher-card__verified">平台已认证</text>
+        </view>
+        <text class="publisher-card__role">{{job.publisherRole}} · 近30天发布 18 单</text>
+      </view>
+      <view class="publisher-card__contact" bindtap="contactPublisher">联系</view>
+    </view>
+
+    <view class="detail-card">
+      <text class="detail-card__title">职位说明</text>
+      <text class="detail-card__description">{{job.description}}</text>
+      <view class="detail-info-row">
+        <view class="detail-info-row__icon">◷</view>
+        <view><text class="detail-info-row__label">授课时间</text><text class="detail-info-row__value">{{job.schedule}}</text></view>
+      </view>
+      <view class="detail-info-row">
+        <view class="detail-info-row__icon">⌖</view>
+        <view><text class="detail-info-row__label">授课地点</text><text class="detail-info-row__value">{{job.address}}</text></view>
+      </view>
+      <view class="detail-info-row">
+        <view class="detail-info-row__icon">◎</view>
+        <view><text class="detail-info-row__label">学生情况</text><text class="detail-info-row__value">{{job.students}}</text></view>
+      </view>
+    </view>
+
+    <view class="process-card">
+      <text class="detail-card__title">申请流程</text>
+      <view class="process-steps">
+        <view class="process-step"><view class="process-step__number">1</view><text>提交申请</text></view>
+        <view class="process-line"></view>
+        <view class="process-step"><view class="process-step__number">2</view><text>资料初审</text></view>
+        <view class="process-line"></view>
+        <view class="process-step"><view class="process-step__number">3</view><text>双方沟通</text></view>
+        <view class="process-line"></view>
+        <view class="process-step"><view class="process-step__number">4</view><text>确认上课</text></view>
+      </view>
+    </view>
+
+    <view class="safety-card">
+      <text class="safety-card__icon">✓</text>
+      <view>
+        <text class="safety-card__title">平台安全保障</text>
+        <text class="safety-card__copy">不提前收取中介费；沟通过程请勿私下转账；遇到异常可随时联系平台客服。</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="detail-actions">
+    <button class="detail-action-icon {{favorite ? 'detail-action-icon--favorite' : ''}}" bindtap="toggleFavorite">{{favorite ? '♥' : '♡'}}<text>收藏</text></button>
+    <button class="detail-action-icon" open-type="share">↗<text>分享</text></button>
+    <button wx:if="{{activeRole === 'TEACHER'}}" class="detail-apply {{applied ? 'detail-apply--pending' : ''}}" bindtap="applyJob">{{applied ? '申请审核中' : '立即申请'}}</button>
+    <button wx:else class="detail-apply" bindtap="contactPublisher">联系老师</button>
+    <view class="safe-bottom"></view>
+  </view>
+</view>

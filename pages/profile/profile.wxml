@@ -1,0 +1,127 @@
+<view class="page-with-tabbar profile-page">
+  <view class="profile-hero">
+    <view class="profile-hero__glow"></view>
+    <view class="profile-user">
+      <view class="profile-avatar">人</view>
+      <view class="profile-user__main">
+        <view class="profile-user__name-row">
+          <text class="profile-user__name">{{account && account.nickname ? account.nickname : '微信用户'}}</text>
+          <text class="profile-user__verified">{{roleName}}</text>
+        </view>
+        <text class="profile-user__meta">深圳 · 大学生家教</text>
+      </view>
+      <view class="profile-edit" bindtap="improveProfile">编辑资料</view>
+    </view>
+
+    <view class="credit-card" bindtap="showCredit" hover-class="credit-card--pressed">
+      <view>
+        <text class="credit-card__eyebrow">平台信誉值</text>
+        <view class="credit-card__score-row">
+          <text class="credit-card__score">92</text>
+          <text class="credit-card__level">优秀</text>
+        </view>
+      </view>
+      <view class="credit-card__progress-wrap">
+        <view class="credit-card__progress-copy">
+          <text>资料完整度</text>
+          <text>80%</text>
+        </view>
+        <view class="credit-card__track"><view class="credit-card__fill"></view></view>
+        <text class="credit-card__hint">再完善一项教育经历可提升排名 →</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="profile-content">
+    <view class="role-switch-card" bindtap="switchRole" hover-class="role-switch-card--pressed">
+      <view class="role-switch-card__icon">{{activeRole === 'TEACHER' ? '🎓' : '⌂'}}</view>
+      <view class="role-switch-card__main">
+        <text class="role-switch-card__title">当前使用{{roleName}}</text>
+        <text class="role-switch-card__copy">{{activeRole === 'TEACHER' ? '浏览需求、报名家教并管理认证' : '发布需求、挑选老师并处理报名'}}</text>
+      </view>
+      <text class="role-switch-card__action">切换{{activeRole === 'TEACHER' ? '家长' : '老师'}}版 ›</text>
+    </view>
+    <view class="stats-card">
+      <view class="stat-item {{activePanel === 'applications' ? 'stat-item--active' : ''}}" data-panel="applications" bindtap="selectPanel">
+        <text class="stat-item__value">{{applications.length}}</text>
+        <text class="stat-item__label">我的申请</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item {{activePanel === 'favorites' ? 'stat-item--active' : ''}}" data-panel="favorites" bindtap="selectPanel">
+        <text class="stat-item__value">{{favorites.length}}</text>
+        <text class="stat-item__label">我的收藏</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item {{activePanel === 'posts' ? 'stat-item--active' : ''}}" data-panel="posts" bindtap="selectPanel">
+        <text class="stat-item__value">{{posts.length}}</text>
+        <text class="stat-item__label">我的发布</text>
+      </view>
+    </view>
+
+    <view class="profile-section">
+      <view class="profile-section__head">
+        <text class="profile-section__title">{{panelTitle}}</text>
+        <text class="profile-section__more">共 {{visibleItems.length}} 条</text>
+      </view>
+      <view class="profile-item" wx:for="{{visibleItems}}" wx:key="id" data-id="{{item.id}}" bindtap="openItem" hover-class="profile-item--pressed">
+        <view class="profile-item__icon">{{activePanel === 'applications' ? '⌁' : activePanel === 'favorites' ? '♡' : '＋'}}</view>
+        <view class="profile-item__main">
+          <text class="profile-item__title">{{item.title}}</text>
+          <text class="profile-item__meta" wx:if="{{activePanel !== 'posts'}}">{{item.district}} · ¥{{item.price}}{{item.unit}}</text>
+          <text class="profile-item__meta" wx:else>{{item.district}} · {{item.grade}} · ¥{{item.price}}/小时</text>
+        </view>
+        <text class="profile-item__status">{{activePanel === 'applications' ? item.status : activePanel === 'posts' ? item.status : '查看'}}</text>
+      </view>
+      <view class="profile-empty" wx:if="{{!visibleItems.length}}">
+        <view class="profile-empty__icon">✦</view>
+        <text>暂无{{panelTitle}}，去首页看看新机会吧</text>
+      </view>
+    </view>
+
+    <view class="menu-card">
+      <view class="menu-item" bindtap="improveProfile">
+        <view class="menu-item__icon menu-item__icon--blue">▤</view>
+        <view class="menu-item__main">
+          <text class="menu-item__title">教育与认证资料</text>
+          <text class="menu-item__copy">已完成 4 / 5 项</text>
+        </view>
+        <text class="menu-item__arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="contactSupport">
+        <view class="menu-item__icon menu-item__icon--green">◌</view>
+        <view class="menu-item__main">
+          <text class="menu-item__title">平台客服与帮助</text>
+          <text class="menu-item__copy">服务时间 09:00–21:00</text>
+        </view>
+        <text class="menu-item__arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="toggleSettings">
+        <view class="menu-item__icon menu-item__icon--purple">⚙</view>
+        <view class="menu-item__main">
+          <text class="menu-item__title">通知与隐私设置</text>
+          <text class="menu-item__copy">派单提醒、聊天与信息保护</text>
+        </view>
+        <text class="menu-item__arrow">{{showSettings ? '⌃' : '›'}}</text>
+      </view>
+    </view>
+
+    <view class="settings-card" wx:if="{{showSettings}}">
+      <view class="setting-row">
+        <view><text class="setting-row__title">好单派送提醒</text><text class="setting-row__copy">匹配新单时即时通知</text></view>
+        <switch color="#3478f6" checked="{{settings.jobNotice}}" data-field="jobNotice" bindchange="updateSetting" />
+      </view>
+      <view class="setting-row">
+        <view><text class="setting-row__title">顾问消息提醒</text><text class="setting-row__copy">申请进度和沟通消息</text></view>
+        <switch color="#3478f6" checked="{{settings.chatNotice}}" data-field="chatNotice" bindchange="updateSetting" />
+      </view>
+      <view class="setting-row">
+        <view><text class="setting-row__title">隐私保护模式</text><text class="setting-row__copy">匹配前隐藏联系方式</text></view>
+        <switch color="#3478f6" checked="{{settings.privacyMode}}" data-field="privacyMode" bindchange="updateSetting" />
+      </view>
+    </view>
+
+    <text class="profile-version">家教直聘 · 让每一次匹配更可靠</text>
+  </view>
+
+  <app-tabbar current="profile"></app-tabbar>
+</view>

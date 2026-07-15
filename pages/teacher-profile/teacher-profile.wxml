@@ -1,0 +1,41 @@
+<view class="teacher-profile-page">
+  <view class="cert-hero">
+    <text class="cert-hero__eyebrow">TEACHER VERIFICATION</text>
+    <text class="cert-hero__title">教师认证资料</text>
+    <text class="cert-hero__copy">真实完整的资料会获得更高曝光和家长信任</text>
+    <view class="cert-status cert-status--{{profile && profile.auditStatus ? profile.auditStatus : 'PENDING'}}">{{profile && profile.auditStatus === 'APPROVED' ? '认证已通过' : profile && profile.auditStatus === 'REJECTED' ? '请修改后重提' : '等待平台审核'}}</view>
+  </view>
+
+  <view class="cert-content" wx:if="{{!loading}}">
+    <view class="cert-card">
+      <text class="cert-card__title">基本身份</text>
+      <view class="cert-grid">
+        <view class="cert-field"><text>真实姓名 *</text><input value="{{form.realName}}" data-field="realName" placeholder="用于平台认证" bindinput="handleInput" /></view>
+        <view class="cert-field"><text>最高学历 *</text><input value="{{form.education}}" data-field="education" placeholder="例如：本科" bindinput="handleInput" /></view>
+      </view>
+      <view class="cert-field"><text>学校 *</text><input value="{{form.school}}" data-field="school" placeholder="请输入学校全称" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>专业 *</text><input value="{{form.major}}" data-field="major" placeholder="例如：数学教育" bindinput="handleInput" /></view>
+    </view>
+
+    <view class="cert-card">
+      <text class="cert-card__title">教学能力</text>
+      <view class="cert-grid">
+        <view class="cert-field"><text>教学年限</text><input value="{{form.teachingYears}}" type="number" data-field="teachingYears" placeholder="0" bindinput="handleInput" /></view>
+        <view class="cert-field"><text>参考课酬</text><input value="{{form.hourlyRate}}" type="number" data-field="hourlyRate" placeholder="元/小时" bindinput="handleInput" /></view>
+      </view>
+      <view class="cert-field"><text>擅长科目 *</text><input value="{{form.subjects}}" data-field="subjects" placeholder="数学、物理（用顿号分隔）" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>服务区域</text><input value="{{form.serviceDistricts}}" data-field="serviceDistricts" placeholder="南山区、福田区" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>个人简介</text><textarea value="{{form.bio}}" data-field="bio" maxlength="500" placeholder="介绍教学经验和教学方法" bindinput="handleInput"></textarea></view>
+    </view>
+
+    <view class="cert-card">
+      <view class="cert-card__head"><text class="cert-card__title">认证材料</text><text class="cert-card__count">{{certifications.length}} 份</text></view>
+      <view class="cert-file" wx:for="{{certifications}}" wx:key="id"><view>▤</view><text>{{item.type}}</text><text class="cert-file__status">{{item.auditStatus === 'APPROVED' ? '已通过' : item.auditStatus === 'REJECTED' ? '需修改' : '审核中'}}</text></view>
+      <button class="upload-button" bindtap="chooseCertification">＋ 上传学历 / 教师资格证明</button>
+      <text class="upload-tip">支持 JPG、PNG、WEBP、PDF，单个文件不超过 10MB</text>
+    </view>
+
+    <button class="save-button" loading="{{saving}}" bindtap="saveProfile">保存并提交审核</button>
+  </view>
+  <view class="cert-loading" wx:else>正在加载教师资料...</view>
+</view>

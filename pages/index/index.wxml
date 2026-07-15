@@ -1,0 +1,181 @@
+<view class="page-with-tabbar home-page">
+  <view class="home-header">
+    <view class="location-row">
+      <view class="location-pill">
+        <text class="location-pill__pin">●</text>
+        <text>{{city}} · {{districtLabel}}</text>
+        <text class="location-pill__arrow">⌄</text>
+      </view>
+      <view class="header-actions">
+        <view class="header-action">•••</view>
+        <view class="header-action">◉</view>
+      </view>
+    </view>
+    <view class="search-box">
+      <text class="search-box__icon">⌕</text>
+      <input
+        class="search-box__input"
+        value="{{query}}"
+        placeholder="试试搜：南山区的初中数学家教"
+        placeholder-class="search-box__placeholder"
+        confirm-type="search"
+        bindinput="handleSearch"
+      />
+      <view wx:if="{{query}}" class="search-box__clear" bindtap="clearSearch">×</view>
+    </view>
+  </view>
+
+  <view class="home-content">
+    <view class="identity-card">
+      <view class="identity-card__avatar">人</view>
+      <view class="identity-card__main">
+        <view class="identity-title-row">
+          <text class="identity-card__title">{{roleName}} · 微信已授权</text>
+          <text class="identity-card__verified">✓</text>
+        </view>
+        <text class="identity-card__phone">手机号：138****0293</text>
+      </view>
+      <view class="identity-card__cert">
+        <text class="identity-card__cert-icon">⌁</text>
+        <text>身份证已验</text>
+      </view>
+      <button class="credit-button" bindtap="switchRole">切换{{activeRole === 'TEACHER' ? '家长' : '老师'}}版</button>
+    </view>
+
+    <view class="notice-card" bindtap="followAccount" hover-class="pressable--active">
+      <view class="notice-card__icon notice-card__icon--blue">✦</view>
+      <text class="notice-card__text">关注公众号，实时接收家教派单通知</text>
+      <view class="notice-card__button">关注</view>
+    </view>
+
+    <view class="notice-card" bindtap="joinGroup" hover-class="pressable--active">
+      <view class="notice-card__icon notice-card__icon--orange">♟</view>
+      <text class="notice-card__text">南山区大学生家教兼职交流5群（392人）</text>
+      <view class="notice-card__status">申请中</view>
+    </view>
+
+    <view class="promo-card">
+      <view class="promo-card__glow promo-card__glow--one"></view>
+      <view class="promo-card__glow promo-card__glow--two"></view>
+      <view class="promo-card__copy">
+        <text class="promo-card__eyebrow">精选推荐 · 资料库</text>
+        <text class="promo-card__title">2026考研满分笔记限时领</text>
+        <text class="promo-card__meta">每日精选学习资料，助力上岸</text>
+      </view>
+      <view class="promo-card__art">
+        <view class="promo-book promo-book--back"></view>
+        <view class="promo-book promo-book--front">高分\n笔记</view>
+      </view>
+      <text class="promo-card__ad">广告</text>
+    </view>
+
+    <view class="category-grid">
+      <view
+        wx:for="{{categories}}"
+        wx:key="key"
+        class="category-card {{selectedRole === item.key ? 'category-card--active' : ''}}"
+        data-role="{{item.key}}"
+        bindtap="chooseCategory"
+        hover-class="pressable--active"
+      >
+        <view class="category-card__icon category-card__icon--{{item.tone}}">{{item.icon}}</view>
+        <text class="category-card__label">{{item.label}}</text>
+      </view>
+    </view>
+
+    <scroll-view class="filter-scroll" scroll-x enhanced show-scrollbar="false">
+      <view class="filter-row">
+        <picker
+          wx:for="{{filterLabels}}"
+          wx:key="*this"
+          class="filter-picker"
+          range="{{filterOptions[index]}}"
+          value="{{filterIndexes[index]}}"
+          data-position="{{index}}"
+          bindchange="handleFilterChange"
+        >
+          <view class="filter-chip {{filterIndexes[index] > 0 ? 'filter-chip--active' : ''}}">
+            <text>{{item}}</text>
+            <text class="filter-chip__arrow">⌄</text>
+          </view>
+        </picker>
+      </view>
+    </scroll-view>
+
+    <view class="shortcut-row">
+      <view class="shortcut-card shortcut-card--map" bindtap="goMap" hover-class="pressable--active">
+        <view>
+          <text class="shortcut-card__title">地图寻单</text>
+          <text class="shortcut-card__copy">查看周边好单</text>
+        </view>
+        <view class="shortcut-card__icon">⌖</view>
+      </view>
+      <view class="shortcut-card shortcut-card--publish" bindtap="goPublish" hover-class="pressable--active">
+        <view>
+          <text class="shortcut-card__title">发布求带</text>
+          <text class="shortcut-card__copy">一键极速发布</text>
+        </view>
+        <view class="shortcut-card__icon">＋</view>
+      </view>
+    </view>
+
+    <view class="jobs-head">
+      <view>
+        <text class="jobs-head__title">最新家教单</text>
+        <text class="jobs-head__count">{{resultCopy}}</text>
+      </view>
+      <view class="jobs-head__filter" bindtap="resetFilters">重置筛选</view>
+    </view>
+
+    <view class="job-list" wx:if="{{filteredJobs.length}}">
+      <view class="job-card" wx:for="{{filteredJobs}}" wx:key="id">
+        <view class="job-card__top" data-id="{{item.id}}" bindtap="openDetail">
+          <view class="job-card__meta">
+            <text class="job-card__code">{{item.code}}</text>
+            <text class="job-card__location">{{city}} · {{item.district}}</text>
+          </view>
+          <view class="job-card__title-row">
+            <text class="job-card__title">{{item.title}}</text>
+            <view class="job-card__price"><text>{{item.price}}</text><text class="job-card__unit">{{item.unit}}</text></view>
+          </view>
+          <view class="publisher-row">
+            <view class="publisher-avatar">东</view>
+            <text>发布人：{{item.publisher}}</text>
+            <text class="publisher-verified">✓</text>
+          </view>
+          <text class="job-card__description">要求：{{item.description}}</text>
+          <view class="job-card__tags">
+            <text class="tag tag--neutral">{{item.settlement}}</text>
+            <text class="tag tag--{{item.badgeTone}}">{{item.badge}}</text>
+            <text class="tag tag--outline">{{item.distance}}</text>
+          </view>
+        </view>
+        <view class="job-card__actions">
+          <button
+            class="apply-button {{item.applied ? 'apply-button--pending' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="applyJob"
+          >{{activeRole === 'TEACHER' ? (item.applied ? '申请中' : '立即申请') : '查看老师'}}</button>
+          <button
+            class="icon-button {{item.favorite ? 'icon-button--favorite' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="toggleFavorite"
+            aria-label="收藏"
+          >{{item.favorite ? '♥' : '♡'}}</button>
+          <button class="icon-button" open-type="share" data-id="{{item.id}}" aria-label="分享">↗</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-card" wx:else>
+      <view class="empty-card__icon">⌕</view>
+      <text class="empty-card__title">暂时没有匹配的家教单</text>
+      <text class="empty-card__copy">换个区域或科目，更多机会正在更新中</text>
+      <button class="empty-card__button" bindtap="resetFilters">查看全部好单</button>
+    </view>
+
+    <view class="list-end" wx:if="{{filteredJobs.length}}">—— 更多优质单子持续更新中 ——</view>
+  </view>
+
+  <app-tabbar current="home"></app-tabbar>
+</view>

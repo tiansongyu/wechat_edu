@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "家教直聘",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "app-tabbar": "/components/app-tabbar/app-tabbar"
+  }
+}

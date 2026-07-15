@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "地图寻单",
+  "usingComponents": {
+    "app-tabbar": "/components/app-tabbar/app-tabbar"
+  }
+}

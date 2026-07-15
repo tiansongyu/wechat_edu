@@ -1,0 +1,26 @@
+{
+  "description": "家教直聘微信小程序",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "bundle": false,
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "compileHotReLoad": true,
+    "postcss": true,
+    "minified": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "ignoreUploadUnusedFiles": true,
+    "uploadWithSourceMap": true,
+    "useCompilerPlugins": false
+  },
+  "compileType": "miniprogram",
+  "appid": "wx02054be10e52aff0",
+  "projectname": "tutor-link-mini-program",
+  "condition": {},
+  "editorSetting": {}
+}

@@ -1,0 +1,44 @@
+page {
+  min-height: 100%;
+  color: #182035;
+  background: #f5f6fa;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+}
+
+view,
+text,
+input,
+textarea,
+button,
+picker {
+  box-sizing: border-box;
+}
+
+button::after {
+  border: 0;
+}
+
+.page-with-tabbar {
+  min-height: 100vh;
+  padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
+}
+
+.surface-card {
+  background: #ffffff;
+  border: 1rpx solid #eef0f5;
+  border-radius: 28rpx;
+  box-shadow: 0 14rpx 34rpx rgba(36, 54, 91, 0.06);
+}
+
+.pressable {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.pressable--active {
+  opacity: 0.78;
+  transform: scale(0.985);
+}
+
+.safe-bottom {
+  height: env(safe-area-inset-bottom);
+}
