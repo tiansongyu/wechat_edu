@@ -18,7 +18,7 @@ for (const mapping of [
 ]) {
   assert.ok(compose.includes(mapping), `compose should include port mapping ${mapping}`);
 }
-assert.match(read("utils/config.js"), /127\.0\.0\.1:4000/);
+assert.match(read("utils/config.js"), /http:\/\/89\.117\.20\.124:4000/);
 
 const schema = read("backend/prisma/schema.prisma");
 for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "UserPreference", "Message", "OutboxEvent", "AuditLog"]) {
