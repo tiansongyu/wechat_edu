@@ -133,7 +133,8 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0].method, "POST");
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
-    console.log("Smoke checks passed: database-only client flows, teacher application eligibility, valid empty JSON writes, 9 pages, stable session identity, and native tab bar.");
+    assert.equal(capturedRequests[0].header["ngrok-skip-browser-warning"], "true", "real-device requests must bypass the ngrok browser warning page");
+    console.log("Smoke checks passed: database-only client flows, teacher application eligibility, valid empty JSON writes, ngrok real-device bypass, 9 pages, stable session identity, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);

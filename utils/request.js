@@ -6,6 +6,14 @@ const REFRESH_KEY = "tutor_link_refresh_token";
 const ROLE_KEY = "tutor_link_active_role";
 const DEVICE_KEY = "tutor_link_device_id";
 
+// Free ngrok tunnels return an HTML browser warning for GET requests coming
+// from a real WeChat WebView.  That response still has status 200, so without
+// this header list pages try to call Array methods on the warning-page string.
+// Keep the bypass scoped to the temporary ngrok experience environment.
+const TUNNEL_HEADERS = API_BASE_URL.indexOf(".ngrok-free.") !== -1
+  ? { "ngrok-skip-browser-warning": "true" }
+  : {};
+
 let refreshPromise = null;
 let loginPromise = null;
 
@@ -20,6 +28,10 @@ function wxRequest(options) {
     wx.request({
       timeout: 15000,
       ...options,
+      header: {
+        ...TUNNEL_HEADERS,
+        ...(options.header || {})
+      },
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(response.data);
