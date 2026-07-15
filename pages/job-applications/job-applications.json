@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "报名管理",
+  "navigationBarBackgroundColor": "#f5f6fa",
+  "navigationBarTextStyle": "black",
+  "backgroundColor": "#f5f6fa",
+  "backgroundTextStyle": "dark",
+  "enablePullDownRefresh": true
+}

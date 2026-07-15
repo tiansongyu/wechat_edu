@@ -3,10 +3,12 @@
     <text class="cert-hero__eyebrow">TEACHER VERIFICATION</text>
     <text class="cert-hero__title">教师认证资料</text>
     <text class="cert-hero__copy">真实完整的资料会获得更高曝光和家长信任</text>
-    <view class="cert-status cert-status--{{profile && profile.auditStatus ? profile.auditStatus : 'PENDING'}}">{{profile && profile.auditStatus === 'APPROVED' ? '认证已通过' : profile && profile.auditStatus === 'REJECTED' ? '请修改后重提' : '等待平台审核'}}</view>
+    <view class="cert-status cert-status--{{auditStatusTone}}">{{auditStatusLabel}}</view>
+    <text class="cert-audit-note" wx:if="{{profile && profile.auditNote}}">审核意见：{{profile.auditNote}}</text>
   </view>
 
-  <view class="cert-content" wx:if="{{!loading}}">
+  <view class="cert-error" wx:if="{{!loading && error}}"><text>资料加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
+  <view class="cert-content" wx:elif="{{!loading}}">
     <view class="cert-card">
       <text class="cert-card__title">基本身份</text>
       <view class="cert-grid">
@@ -32,7 +34,7 @@
       <view class="cert-card__head"><text class="cert-card__title">认证材料</text><text class="cert-card__count">{{certifications.length}} 份</text></view>
       <view class="cert-file" wx:for="{{certifications}}" wx:key="id"><view>▤</view><text>{{item.type}}</text><text class="cert-file__status">{{item.auditStatus === 'APPROVED' ? '已通过' : item.auditStatus === 'REJECTED' ? '需修改' : '审核中'}}</text></view>
       <button class="upload-button" bindtap="chooseCertification">＋ 上传学历 / 教师资格证明</button>
-      <text class="upload-tip">支持 JPG、PNG、WEBP、PDF，单个文件不超过 10MB</text>
+      <text class="upload-tip">支持 JPG、PNG、PDF，单个文件不超过 10MB</text>
     </view>
 
     <button class="save-button" loading="{{saving}}" bindtap="saveProfile">保存并提交审核</button>

@@ -1,21 +1,28 @@
 <script setup lang="ts">
 import { reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { getApiErrorMessage } from "../api/client";
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 const loading = ref(false);
-const form = reactive({ username: "admin", password: "Admin123456!" });
+const form = reactive({ username: "", password: "" });
+if (route.query.expired) ElMessage.warning("登录已过期，请重新登录");
 
 async function submit() {
+  if (!form.username.trim() || !form.password) {
+    ElMessage.warning("请输入管理员账号和密码");
+    return;
+  }
   loading.value = true;
   try {
     await auth.login(form.username, form.password);
     await router.replace("/dashboard");
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || "登录失败，请检查账号密码");
+  } catch (error: unknown) {
+    ElMessage.error(getApiErrorMessage(error, "登录失败，请检查账号密码"));
   } finally {
     loading.value = false;
   }
@@ -35,11 +42,11 @@ async function submit() {
         <div class="brand login-brand"><span class="brand-mark">家</span><div><strong>家教直聘</strong><small>ADMIN CONSOLE</small></div></div>
         <h2>欢迎回来</h2><p>请使用管理员账号继续</p>
         <el-form label-position="top" @submit.prevent="submit">
-          <el-form-item label="管理员账号"><el-input v-model="form.username" size="large" /></el-form-item>
-          <el-form-item label="密码"><el-input v-model="form.password" type="password" size="large" show-password @keyup.enter="submit" /></el-form-item>
+          <el-form-item label="管理员账号"><el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入管理员账号" /></el-form-item>
+          <el-form-item label="密码"><el-input v-model="form.password" type="password" size="large" autocomplete="current-password" placeholder="请输入密码" show-password @keyup.enter="submit" /></el-form-item>
           <el-button type="primary" size="large" :loading="loading" class="login-button" @click="submit">进入管理后台</el-button>
         </el-form>
-        <small class="login-tip">首次启动可使用 .env 中配置的 ADMIN_USERNAME / ADMIN_PASSWORD</small>
+        <small class="login-tip">账号由部署环境安全配置；请勿在共享设备保存密码</small>
       </div>
     </div>
   </div>

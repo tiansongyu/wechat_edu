@@ -6,6 +6,7 @@ const DashboardView = () => import("../views/DashboardView.vue");
 const UsersView = () => import("../views/UsersView.vue");
 const TeacherAuditsView = () => import("../views/TeacherAuditsView.vue");
 const JobAuditsView = () => import("../views/JobAuditsView.vue");
+const OperationsView = () => import("../views/OperationsView.vue");
 const AuditLogsView = () => import("../views/AuditLogsView.vue");
 
 const router = createRouter({
@@ -21,6 +22,7 @@ const router = createRouter({
         { path: "users", component: UsersView, meta: { title: "用户管理" } },
         { path: "teacher-audits", component: TeacherAuditsView, meta: { title: "教师认证" } },
         { path: "job-audits", component: JobAuditsView, meta: { title: "发布审核" } },
+        { path: "operations", component: OperationsView, meta: { title: "业务履约" } },
         { path: "audit-logs", component: AuditLogsView, meta: { title: "操作审计" } }
       ]
     }

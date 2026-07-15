@@ -17,6 +17,8 @@ DOCKER_BUILD_PROXY=http://host.docker.internal:7897 docker compose up -d --build
 
 如果 `migrate` 容器显示 `Exited (0)`，表示迁移和种子数据已成功完成，这是预期状态。
 
+本地端口统一使用 `4000` 段：网关 `4000`、PostgreSQL `4001`、Redis `4002`、MinIO API `4003`、MinIO 控制台 `4004`。容器内部仍使用各服务的标准端口。
+
 停止服务但保留数据：
 
 ```bash
@@ -36,8 +38,8 @@ docker compose up -d --build
 
 1. 准备 Linux 服务器、域名、Docker Engine 和 Compose Plugin。
 2. 将 `.env.example` 复制为 `.env`，替换所有 `change-me` 和默认密码。
-3. 设置微信小程序密钥，并关闭模拟登录。
-4. 设置 `MINIO_PUBLIC_ENDPOINT` 为认证文件使用的公网 HTTPS 文件域名，并通过反向代理或对象存储网关转发到 MinIO。
+3. 设置 `WECHAT_APP_SECRET`；生产覆盖配置会强制关闭模拟登录，并禁止写入演示数据。
+4. 设置 `MINIO_PUBLIC_ENDPOINT` 为认证文件使用的公网 HTTPS 文件域名，同时设置 `MINIO_PUBLIC_PORT=443`、`MINIO_PUBLIC_USE_SSL=true`，并通过反向代理或对象存储网关转发到 MinIO。
 5. 把证书保存为 `infra/nginx/certs/fullchain.pem` 和 `infra/nginx/certs/privkey.pem`；生产配置会启用 TLS 1.2/1.3 和 HTTP 到 HTTPS 跳转。
 6. 执行：
 
@@ -45,7 +47,7 @@ docker compose up -d --build
 docker compose -f compose.yaml -f compose.production.yaml up -d --build
 ```
 
-生产配置不会将 PostgreSQL、Redis 和 MinIO 暴露到公网。API 容器为无状态设计，可以通过 Compose scale 或编排平台增加副本：
+生产配置不会将 PostgreSQL、Redis 和 MinIO 暴露到公网，也不会写入演示家长、教师和家教单。迁移阶段只幂等初始化角色、系统设置及首次管理员账号，已存在管理员不会被部署过程重置密码。API 容器为无状态设计，可以通过 Compose scale 或编排平台增加副本：
 
 ```bash
 docker compose -f compose.yaml -f compose.production.yaml up -d --scale api=2 --scale worker=2

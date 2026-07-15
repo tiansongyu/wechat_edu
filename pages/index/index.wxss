@@ -775,3 +775,17 @@
   font-size: 20rpx;
   text-align: center;
 }
+
+.role-indicator { color: #42618f; font-size: 22rpx; font-weight: 700; }
+.identity-card__avatar--image, .publisher-avatar--image { padding: 0; overflow: hidden; }
+.page-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320rpx; padding: 48rpx 24rpx; color: #7c869a; font-size: 24rpx; text-align: center; }
+.page-state__title { margin-bottom: 12rpx; color: #2c3750; font-size: 30rpx; font-weight: 700; }
+.page-state button { min-width: 200rpx; margin-top: 28rpx; color: #fff; font-size: 24rpx; background: #3478f6; border-radius: 999rpx; }
+.state-spinner { width: 42rpx; height: 42rpx; margin-bottom: 20rpx; border: 5rpx solid #dce7fb; border-top-color: #3478f6; border-radius: 50%; animation: state-spin 800ms linear infinite; }
+@keyframes state-spin { to { transform: rotate(360deg); } }
+@media (max-width: 340px) {
+  .home-content { padding-right: 20rpx; padding-left: 20rpx; }
+  .identity-card { flex-wrap: wrap; }
+  .credit-button { margin-top: 14rpx; }
+  .job-card__title-row { align-items: flex-start; flex-direction: column; }
+}

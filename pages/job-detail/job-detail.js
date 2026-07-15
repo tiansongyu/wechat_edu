@@ -1,128 +1,258 @@
-const { findJob } = require("../../utils/data");
-const store = require("../../utils/store");
 const api = require("../../utils/api");
 
 Page({
   data: {
+    loading: true,
+    error: "",
+    action: "",
     job: null,
-    applied: false,
-    favorite: false,
     jobId: "",
-    backendOnline: false,
-    activeRole: "PARENT"
+    account: null,
+    activeRole: "PARENT",
+    currentApplication: null,
+    applicationLabel: "",
+    isOwner: false,
+    ownerRole: "PARENT",
+    expectedViewerRole: "TEACHER",
+    ownerRoleMismatch: false,
+    viewerRoleMismatch: false,
+    canApply: false,
+    canContact: false,
+    canManageApplications: false,
+    contactLabel: "联系发布人",
+    publisherActionLabel: "联系"
   },
 
   onLoad(options) {
-    const job = findJob(options.id) || null;
-    this.setData({ job, jobId: options.id, activeRole: api.getActiveRole() });
-    wx.setNavigationBarTitle({ title: job ? job.title.slice(0, 10) : "家教单详情" });
-    this.loadRemoteJob();
-  },
-
-  async loadRemoteJob() {
-    try {
-      if (getApp().globalData.authReady) await getApp().globalData.authReady;
-      const item = await api.request(`/api/v1/jobs/${this.data.jobId}`);
-      const job = api.mapJob(item);
-      this.setData({ job, backendOnline: true, favorite: item.favorite });
-      wx.setNavigationBarTitle({ title: job.title.slice(0, 10) });
-    } catch (error) {
-      if (!this.data.job) this.setData({ job: findJob("job-001") });
+    const jobId = options.id || "";
+    this.setData({ jobId });
+    if (!jobId) {
+      this.setData({ loading: false, error: "缺少家教信息编号" });
+      return;
     }
+    this.loadData();
   },
 
   onShow() {
-    if (!this.data.job) return;
-    const keys = getApp().globalData.storageKeys;
-    const appliedIds = store.read(keys.applications, ["job-003"]);
-    const favoriteIds = store.read(keys.favorites, []);
-    this.setData({
-      applied: appliedIds.includes(this.data.job.id),
-      favorite: favoriteIds.includes(this.data.job.id)
-    });
+    if (this.data.jobId && this.data.job) this.loadData(false);
   },
+
+  async loadData(showLoading = true) {
+    if (showLoading) this.setData({ loading: true, error: "" });
+    try {
+      const account = await getApp().ensureAuth();
+      const activeRole = account.activeRole || api.getActiveRole();
+      const requests = [api.getJob(this.data.jobId)];
+      if (activeRole === "TEACHER") requests.push(api.listTeacherApplications());
+      const [rawJob, applications = []] = await Promise.all(requests);
+      const job = api.normalizeJob(rawJob);
+      const currentApplication = activeRole === "TEACHER"
+        ? (rawJob.currentApplication
+          || applications.find((item) => (item.jobId || (item.job && item.job.id)) === job.id)
+          || null)
+        : null;
+      const isOwner = Boolean(job.owner && job.owner.id === account.id);
+      const ownerRole = job.type === "TEACHING_NEED" ? "PARENT" : "TEACHER";
+      const expectedViewerRole = job.type === "TEACHING_NEED" ? "TEACHER" : "PARENT";
+      const ownerRoleMismatch = isOwner && activeRole !== ownerRole;
+      const viewerRoleMismatch = !isOwner && activeRole !== expectedViewerRole;
+      const applicationLabel = currentApplication
+        ? ({ PENDING: "申请审核中", ACCEPTED: "已被录用", REJECTED: "本次未选中", CANCELLED: "重新申请" }[currentApplication.status] || currentApplication.status)
+        : job.status === "PUBLISHED" ? "今天可申请" : job.statusLabel;
+      const canApply = activeRole === "TEACHER"
+        && job.type === "TEACHING_NEED"
+        && job.status === "PUBLISHED"
+        && !isOwner
+        && (!currentApplication || currentApplication.status === "CANCELLED");
+      const canContact = !isOwner && (
+        (job.type === "TEACHING_NEED" && activeRole === "TEACHER" && currentApplication && currentApplication.status === "ACCEPTED")
+        || (job.type === "TEACHER_OFFER" && activeRole === "PARENT" && job.status === "PUBLISHED")
+      );
+      this.setData({
+        account,
+        activeRole,
+        job,
+        currentApplication,
+        applicationLabel,
+        isOwner,
+        ownerRole,
+        expectedViewerRole,
+        ownerRoleMismatch,
+        viewerRoleMismatch,
+        canApply,
+        canContact,
+        canManageApplications: isOwner && activeRole === "PARENT" && job.type === "TEACHING_NEED",
+        contactLabel: job.type === "TEACHER_OFFER" ? "联系老师" : "联系发布人",
+        publisherActionLabel: isOwner ? "管理" : viewerRoleMismatch ? "切换" : "联系",
+        loading: false,
+        error: ""
+      });
+      wx.setNavigationBarTitle({ title: job.title.slice(0, 12) });
+    } catch (error) {
+      this.setData({ loading: false, error: error.message || "详情加载失败", job: null });
+    }
+  },
+
+  retry() { this.loadData(); },
 
   applyJob() {
     if (this.data.activeRole !== "TEACHER") {
       wx.showToast({ title: "请先切换到老师版", icon: "none" });
       return;
     }
-    if (this.data.applied) {
-      wx.showModal({
-        title: "申请审核中",
-        content: "平台正在核验你的资料，审核结果会通过消息中心通知。",
-        showCancel: false,
-        confirmText: "知道了",
-        confirmColor: "#3478f6"
-      });
+    if (!this.data.job || this.data.job.status !== "PUBLISHED") {
+      wx.showToast({ title: "该发布当前不可申请", icon: "none" });
+      return;
+    }
+    if (this.data.currentApplication && this.data.currentApplication.status !== "CANCELLED") {
+      wx.showToast({ title: this.data.applicationLabel, icon: "none" });
       return;
     }
     wx.showModal({
       title: "确认申请",
-      content: "提交后平台顾问会联系你核对教学经历，请保持消息通知开启。",
+      content: "平台将使用数据库中的教师认证资料提交申请。",
       confirmText: "提交申请",
       confirmColor: "#3478f6",
       success: async ({ confirm }) => {
-        if (!confirm) return;
+        if (!confirm || this.data.action) return;
+        this.setData({ action: "apply" });
         try {
-          if (this.data.backendOnline) await api.applyJob(this.data.job.id);
-          store.appendUnique(getApp().globalData.storageKeys.applications, this.data.job.id);
-          this.setData({ applied: true });
+          await api.applyJob(this.data.job.id);
+          await this.loadData(false);
           wx.showToast({ title: "申请已提交", icon: "success" });
         } catch (error) {
           wx.showToast({ title: error.message || "申请失败", icon: "none" });
+        } finally {
+          this.setData({ action: "" });
         }
       }
     });
   },
 
-  toggleFavorite() {
-    const favoriteIds = store.toggleInList(getApp().globalData.storageKeys.favorites, this.data.job.id);
-    const favorite = favoriteIds.includes(this.data.job.id);
-    this.setData({ favorite });
-    if (this.data.backendOnline) api.favoriteJob(this.data.job.id, favorite).catch(() => {});
-    wx.showToast({ title: favorite ? "已收藏" : "已取消收藏", icon: "none" });
+  cancelApplication() {
+    const application = this.data.currentApplication;
+    if (this.data.activeRole !== "TEACHER" || !application || application.status !== "PENDING") return;
+    wx.showModal({
+      title: "取消申请",
+      content: "取消后发布人将不再处理本次申请，请填写取消原因。",
+      editable: true,
+      placeholderText: "请输入取消原因（必填）",
+      confirmText: "确认取消",
+      confirmColor: "#d85858",
+      success: async ({ confirm, content }) => {
+        if (!confirm || this.data.action) return;
+        const reason = String(content || "").trim();
+        if (!reason) {
+          wx.showToast({ title: "请输入取消原因", icon: "none" });
+          return;
+        }
+        this.setData({ action: "cancel" });
+        try {
+          await api.cancelApplication(application.id, reason);
+          await this.loadData(false);
+          wx.showToast({ title: "申请已取消", icon: "none" });
+        } catch (error) {
+          wx.showToast({ title: error.message || "取消失败", icon: "none" });
+        } finally {
+          this.setData({ action: "" });
+        }
+      }
+    });
   },
 
-  contactPublisher() {
-    if (this.data.activeRole === "PARENT" && this.data.job.type === "TEACHER_OFFER") {
-      wx.showModal({
-        title: "联系老师",
-        content: "平台会建立受保护的会话，匹配确认前不会展示双方联系方式。",
-        confirmText: "开始沟通",
-        confirmColor: "#3478f6",
-        success: async ({ confirm }) => {
-          if (!confirm) return;
-          try {
-            if (this.data.backendOnline && this.data.job.owner && this.data.job.owner.id) {
-              await api.request("/api/v1/conversations", { method: "POST", data: { memberId: this.data.job.owner.id } });
-            }
-            wx.redirectTo({ url: "/pages/messages/messages" });
-          } catch (error) {
-            wx.showToast({ title: error.message || "暂时无法建立会话", icon: "none" });
-          }
-        }
-      });
+  async toggleFavorite() {
+    if (!this.data.job || this.data.action) return;
+    const favorite = !this.data.job.favorite;
+    this.setData({ action: "favorite" });
+    try {
+      await api.favoriteJob(this.data.job.id, favorite);
+      await this.loadData(false);
+      wx.showToast({ title: favorite ? "已收藏" : "已取消收藏", icon: "none" });
+    } catch (error) {
+      wx.showToast({ title: error.message || "收藏操作失败", icon: "none" });
+    } finally {
+      this.setData({ action: "" });
+    }
+  },
+
+  async contactPublisher() {
+    const { job, activeRole, currentApplication, action, viewerRoleMismatch } = this.data;
+    if (!job || action) return;
+    if (this.data.isOwner) {
+      if (this.data.canManageApplications) this.manageApplications();
+      else this.openMyPosts();
       return;
     }
-    wx.showModal({
-      title: "联系发布人",
-      content: "为保护双方隐私，提交申请并通过初审后即可进入平台沟通。",
-      confirmText: this.data.applied ? "去看消息" : "先提交申请",
-      confirmColor: "#3478f6",
-      success: ({ confirm }) => {
-        if (!confirm) return;
-        if (this.data.applied) wx.redirectTo({ url: "/pages/messages/messages" });
-        else this.applyJob();
-      }
-    });
+    if (viewerRoleMismatch) {
+      this.switchViewerRole();
+      return;
+    }
+    if (activeRole === "TEACHER" && job.type === "TEACHING_NEED" && (!currentApplication || currentApplication.status !== "ACCEPTED")) {
+      if (this.data.canApply) this.applyJob();
+      else wx.showToast({ title: currentApplication ? this.data.applicationLabel : "该发布当前不可申请", icon: "none" });
+      return;
+    }
+    if (!this.data.canContact || !job.owner || !job.owner.id) {
+      wx.showToast({ title: "发布人信息暂不可用", icon: "none" });
+      return;
+    }
+    this.setData({ action: "contact" });
+    try {
+      const conversation = await api.startConversation(job.owner.id, job.id);
+      wx.navigateTo({ url: `/pages/conversation/conversation?id=${conversation.id}&title=${encodeURIComponent(job.publisher)}` });
+    } catch (error) {
+      wx.showToast({ title: error.message || "暂时无法建立会话", icon: "none" });
+    } finally {
+      this.setData({ action: "" });
+    }
+  },
+
+  manageApplications() {
+    const job = this.data.job;
+    if (!job || !this.data.canManageApplications) return;
+    wx.navigateTo({ url: `/pages/job-applications/job-applications?jobId=${job.id}&title=${encodeURIComponent(job.title)}` });
+  },
+
+  async switchRoleAndReload(role) {
+    if (this.data.action || this.data.activeRole === role) return true;
+    this.setData({ action: "role" });
+    wx.showLoading({ title: "切换中" });
+    try {
+      await api.switchRole(role);
+      getApp().globalData.activeRole = role;
+      getApp().globalData.account = null;
+      getApp().globalData.authReady = null;
+      await getApp().ensureAuth(true);
+      return true;
+    } catch (error) {
+      wx.showToast({ title: error.message || "角色切换失败", icon: "none" });
+      return false;
+    } finally {
+      wx.hideLoading();
+      this.setData({ action: "" });
+    }
+  },
+
+  async switchViewerRole() {
+    const role = this.data.expectedViewerRole;
+    const switched = await this.switchRoleAndReload(role);
+    if (switched) {
+      await this.loadData(false);
+      wx.showToast({ title: `已进入${role === "TEACHER" ? "老师" : "家长"}版`, icon: "none" });
+    }
+  },
+
+  async openMyPosts() {
+    if (this.data.ownerRoleMismatch) {
+      const switched = await this.switchRoleAndReload(this.data.ownerRole);
+      if (!switched) return;
+    }
+    wx.switchTab({ url: "/pages/publish/publish" });
   },
 
   onShareAppMessage() {
     const job = this.data.job;
-    return {
-      title: `${job.price}${job.unit}｜${job.title}`,
-      path: `/pages/job-detail/job-detail?id=${job.id}`
-    };
+    if (!job) return { title: "家教直聘", path: "/pages/index/index" };
+    return { title: `${job.price}${job.unit}｜${job.title}`, path: `/pages/job-detail/job-detail?id=${job.id}` };
   }
 });

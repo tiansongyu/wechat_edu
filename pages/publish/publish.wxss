@@ -402,3 +402,9 @@
 .post-card__remove {
   color: #e15f59;
 }
+
+.publish-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 360rpx; padding: 40rpx; color: #7d8798; font-size: 24rpx; text-align: center; }.publish-state__title { margin-bottom: 12rpx; color: #27334a; font-size: 31rpx; font-weight: 700; }.publish-state button { margin-top: 26rpx; color: #fff; font-size: 23rpx; background: #3478f6; border-radius: 999rpx; }.publish-spinner { width: 44rpx; height: 44rpx; margin-bottom: 18rpx; border: 5rpx solid #dce6f8; border-top-color: #3478f6; border-radius: 50%; animation: publish-spin 800ms linear infinite; } @keyframes publish-spin { to { transform: rotate(360deg); } }
+.location-select { display: flex; flex: 1; flex-direction: column; justify-content: center; min-height: 104rpx; padding: 15rpx 18rpx; background: #f7f8fa; border: 1rpx solid #e7eaf0; border-radius: 19rpx; }.location-select text:first-child { color: #636d7f; font-size: 19rpx; }.location-select text:last-child { margin-top: 8rpx; color: #3478f6; font-size: 21rpx; }
+.post-card__note { display: block; margin-top: 12rpx; padding: 12rpx; color: #b15745; font-size: 20rpx; background: #fff4ef; border-radius: 12rpx; }.post-actions { display: flex; gap: 24rpx; color: #3478f6; }.posts-empty { padding: 48rpx 20rpx; color: #939bab; font-size: 22rpx; text-align: center; }
+.edit-banner { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; padding: 18rpx 20rpx; color: #875f19; font-size: 20rpx; background: #fff5d8; border: 1rpx solid #f1dfa9; border-radius: 18rpx; }.edit-banner text:last-child { margin-left: 18rpx; color: #3478f6; font-weight: 700; }
+@media (max-width: 340px) { .form-grid { flex-direction: column; }.form-picker, .form-field--half { width: 100%; }.type-option { padding: 16rpx 12rpx; }.type-option__copy { display: none; } }

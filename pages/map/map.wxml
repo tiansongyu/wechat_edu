@@ -1,91 +1,30 @@
 <view class="page-with-tabbar map-page">
   <view class="map-toolbar">
-    <view class="map-search">
-      <text class="map-search__icon">⌕</text>
-      <input
-        class="map-search__input"
-        value="{{query}}"
-        placeholder="搜索附近家教..."
-        placeholder-class="map-search__placeholder"
-        bindinput="handleSearch"
-      />
-    </view>
-    <picker class="district-picker" range="{{districts}}" value="{{districtIndex}}" bindchange="changeDistrict">
-      <view class="district-button">⌁</view>
-    </picker>
+    <view class="map-search"><text class="map-search__icon">⌕</text><input class="map-search__input" value="{{query}}" placeholder="搜索附近家教" bindinput="handleSearch" /><text wx:if="{{query}}" class="map-search__clear" bindtap="clearSearch">×</text></view>
+    <picker class="district-picker" range="{{districts}}" value="{{districtIndex}}" bindchange="changeDistrict"><view class="district-button">{{districts[districtIndex]}}⌄</view></picker>
   </view>
 
-  <view class="map-canvas">
-    <view class="map-water map-water--one"></view>
-    <view class="map-water map-water--two"></view>
-    <view class="map-road map-road--one"></view>
-    <view class="map-road map-road--two"></view>
-    <view class="map-road map-road--three"></view>
-    <view class="map-road map-road--four"></view>
-    <view class="map-label map-label--one">科技园</view>
-    <view class="map-label map-label--two">福田中心</view>
-    <view class="map-label map-label--three">宝安中心</view>
+  <view class="map-state" wx:if="{{loading}}"><view class="map-spinner"></view><text>正在获取真实位置和附近信息...</text></view>
+  <view class="map-state" wx:elif="{{error}}"><text class="map-state__title">加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
+  <block wx:else>
+    <view class="location-fallback" wx:if="{{fallbackMode}}"><text>{{fallbackReason}}</text><button bindtap="resetLocation">重新定位</button></view>
+    <map wx:else class="native-map" latitude="{{latitude}}" longitude="{{longitude}}" markers="{{markers}}" scale="12" show-location enable-3D="false" bindmarkertap="selectMarker"></map>
 
-    <view
-      wx:for="{{visibleJobs}}"
-      wx:key="id"
-      class="price-marker {{selectedJob && selectedJob.id === item.id ? 'price-marker--active' : ''}}"
-      style="left: {{item.x}}%; top: {{item.y}}%;"
-      data-id="{{item.id}}"
-      bindtap="selectMarker"
-      hover-class="price-marker--pressed"
-    >
-      <text>¥{{item.price}}</text>
-      <view class="price-marker__dot" style="background: {{item.color}};"></view>
-    </view>
+    <view class="map-controls" wx:if="{{!fallbackMode}}"><button bindtap="resetLocation" aria-label="重新定位">◎</button><button bindtap="toggleList" aria-label="查看列表">≡</button></view>
 
-    <view class="map-empty" wx:if="{{!visibleJobs.length}}">
-      <text class="map-empty__icon">⌕</text>
-      <text>当前区域暂无匹配家教单</text>
-    </view>
-
-    <view class="map-controls">
-      <view class="map-control" bindtap="resetLocation">◎</view>
-      <view class="map-control" bindtap="toggleList">≡</view>
-    </view>
-
-    <view class="nearby-list" wx:if="{{showList && visibleJobs.length}}">
-      <view class="nearby-list__head">
-        <text>附近 {{visibleJobs.length}} 个好单</text>
-        <text bindtap="toggleList">收起</text>
-      </view>
-      <scroll-view class="nearby-list__scroll" scroll-y>
-        <view
-          wx:for="{{visibleJobs}}"
-          wx:key="id"
-          class="nearby-list__item {{selectedJob.id === item.id ? 'nearby-list__item--active' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="selectFromList"
-        >
-          <view>
-            <text class="nearby-list__title">{{item.title}}</text>
-            <text class="nearby-list__meta">{{item.district}} · {{item.distance}}</text>
-          </view>
-          <text class="nearby-list__price">¥{{item.price}}</text>
+    <view class="nearby-panel {{showList || fallbackMode ? 'nearby-panel--open' : ''}}" wx:if="{{showList || fallbackMode}}">
+      <view class="nearby-panel__head"><text>{{fallbackMode ? '数据库列表' : '附近信息'}} · {{visibleJobs.length}} 条</text><text wx:if="{{!fallbackMode}}" bindtap="toggleList">收起</text></view>
+      <scroll-view class="nearby-panel__scroll" scroll-y>
+        <view class="nearby-item {{selectedJob && selectedJob.id === item.id ? 'nearby-item--active' : ''}}" wx:for="{{visibleJobs}}" wx:key="id" data-id="{{item.id}}" bindtap="selectFromList">
+          <view class="nearby-item__main"><text class="nearby-item__title">{{item.title}}</text><text class="nearby-item__meta">{{item.locationLabel || '地点待沟通'}} · {{item.subject}}</text></view><text class="nearby-item__price">¥{{item.price}}</text><button data-id="{{item.id}}" bindtap="openDetail">查看</button>
         </view>
+        <view class="map-empty" wx:if="{{!visibleJobs.length}}"><text>数据库中暂无匹配信息</text></view>
       </scroll-view>
     </view>
 
-    <view class="map-job-card" wx:if="{{selectedJob && !showList}}" bindtap="openDetail" hover-class="map-job-card--pressed">
-      <view class="map-job-card__icon">▤</view>
-      <view class="map-job-card__main">
-        <view class="map-job-card__title-row">
-          <text class="map-job-card__code">{{selectedJob.code}}</text>
-          <text class="map-job-card__title">{{selectedJob.title}}</text>
-        </view>
-        <text class="map-job-card__meta">{{selectedJob.district}} · 距您 {{selectedJob.distance}}</text>
-      </view>
-      <view class="map-job-card__price">
-        <text>¥{{selectedJob.price}}</text>
-        <text class="map-job-card__unit">{{selectedJob.unit}}</text>
-      </view>
+    <view class="selected-card" wx:if="{{selectedJob && !showList && !fallbackMode}}" data-id="{{selectedJob.id}}" bindtap="openDetail">
+      <view class="selected-card__main"><text class="selected-card__type">{{selectedJob.typeLabel}}</text><text class="selected-card__title">{{selectedJob.title}}</text><text class="selected-card__meta">{{selectedJob.locationLabel}} · {{selectedJob.distance || '距离计算中'}}</text></view><view class="selected-card__price">¥{{selectedJob.price}}<text>{{selectedJob.unit}}</text></view>
     </view>
-  </view>
-
-  <app-tabbar current="map"></app-tabbar>
+    <view class="map-empty-card" wx:if="{{!visibleJobs.length && !fallbackMode}}"><text>当前位置附近暂无带坐标的已发布信息</text><button bindtap="toggleList">查看列表</button></view>
+  </block>
 </view>

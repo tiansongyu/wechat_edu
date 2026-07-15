@@ -1,0 +1,126 @@
+<view class="conversation-page">
+  <view class="conversation-banner conversation-banner--sync" wx:if="{{refreshing}}">
+    <view class="conversation-banner__spinner"></view>
+    <text>正在同步最新消息</text>
+  </view>
+
+  <view class="conversation-banner conversation-banner--warning" wx:if="{{readSyncError}}">
+    <view class="conversation-banner__main">
+      <text class="conversation-banner__title">已读状态尚未同步</text>
+      <text class="conversation-banner__copy">{{readSyncError}}</text>
+    </view>
+    <button class="conversation-banner__action" bindtap="retryReadSync" loading="{{readSyncing}}">重试</button>
+  </view>
+
+  <view class="conversation-banner conversation-banner--error" wx:if="{{loadError && messages.length}}">
+    <view class="conversation-banner__main">
+      <text class="conversation-banner__title">消息同步失败</text>
+      <text class="conversation-banner__copy">{{loadError}}</text>
+    </view>
+    <button class="conversation-banner__action" bindtap="retryLoad">刷新</button>
+  </view>
+
+  <view class="conversation-main">
+    <view class="conversation-state" wx:if="{{loading && !loaded}}">
+      <view class="conversation-state__spinner"></view>
+      <text class="conversation-state__title">正在读取聊天记录</text>
+      <text class="conversation-state__copy">消息将从平台数据库安全加载</text>
+    </view>
+
+    <view class="conversation-state" wx:elif="{{loadError && !loaded}}">
+      <view class="conversation-state__icon conversation-state__icon--error">!</view>
+      <text class="conversation-state__title">暂时无法进入会话</text>
+      <text class="conversation-state__copy">{{loadError}}</text>
+      <button wx:if="{{conversationId}}" class="conversation-state__button" bindtap="retryLoad">重新加载</button>
+    </view>
+
+    <scroll-view
+      wx:else
+      class="conversation-scroll"
+      scroll-y="{{true}}"
+      scroll-with-animation="{{scrollAnimated}}"
+      scroll-into-view="{{scrollIntoView}}"
+      upper-threshold="40"
+      bindscrolltoupper="loadOlder"
+      enhanced="{{true}}"
+      show-scrollbar="{{false}}"
+    >
+      <view class="conversation-history">
+        <button
+          wx:if="{{hasMore}}"
+          class="history-button"
+          bindtap="loadOlder"
+          loading="{{loadingOlder}}"
+          disabled="{{loadingOlder}}"
+        >{{loadingOlder ? '正在加载' : '加载更早消息'}}</button>
+        <text class="history-end" wx:elif="{{messages.length}}">没有更早的消息了</text>
+        <view class="history-error" wx:if="{{olderError}}">
+          <text>{{olderError}}</text>
+          <text class="history-error__retry" bindtap="loadOlder">重试</text>
+        </view>
+      </view>
+
+      <view class="conversation-empty" wx:if="{{!messages.length}}">
+        <view class="conversation-empty__icon">◌</view>
+        <text class="conversation-empty__title">会话已建立</text>
+        <text class="conversation-empty__copy">发送第一条消息，开始沟通上课安排。</text>
+        <view class="conversation-empty__safety">请勿发送验证码、银行卡号等敏感信息</view>
+      </view>
+
+      <view class="message-list" wx:else>
+        <view
+          wx:for="{{messages}}"
+          wx:key="id"
+          id="message-{{item.id}}"
+          class="message-row {{item.isMine ? 'message-row--mine' : ''}}"
+        >
+          <image
+            wx:if="{{!item.isMine && item.avatarUrl}}"
+            class="message-avatar"
+            src="{{item.avatarUrl}}"
+            mode="aspectFill"
+          ></image>
+          <view wx:elif="{{!item.isMine}}" class="message-avatar message-avatar--fallback">{{item.avatarText}}</view>
+          <view class="message-body">
+            <text class="message-sender" wx:if="{{!item.isMine}}">{{item.senderName}}</text>
+            <view class="message-bubble {{item.isMine ? 'message-bubble--mine' : ''}}">
+              <text class="message-content" user-select="{{true}}">{{item.content}}</text>
+            </view>
+            <text class="message-time">{{item.timeLabel}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="conversation-scroll__bottom"></view>
+    </scroll-view>
+  </view>
+
+  <view class="conversation-composer" wx:if="{{conversationId}}">
+    <view class="composer-safety">
+      <text class="composer-safety__icon">✓</text>
+      <text>平台保护沟通记录，请勿私下转账</text>
+    </view>
+    <view class="composer-row">
+      <textarea
+        class="composer-input"
+        value="{{inputValue}}"
+        placeholder="输入消息…"
+        placeholder-class="composer-input__placeholder"
+        maxlength="3000"
+        auto-height="{{true}}"
+        confirm-type="send"
+        confirm-hold="{{true}}"
+        disabled="{{!loaded || sending}}"
+        bindinput="handleInput"
+        bindfocus="handleInputFocus"
+        bindconfirm="sendMessage"
+        cursor-spacing="18"
+      ></textarea>
+      <button
+        class="composer-send"
+        bindtap="sendMessage"
+        loading="{{sending}}"
+        disabled="{{!loaded || sending || !inputValue}}"
+      >发送</button>
+    </view>
+  </view>
+</view>

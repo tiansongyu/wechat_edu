@@ -1,0 +1,19 @@
+<view class="tabbar-wrap">
+  <view class="tabbar">
+    <view
+      wx:for="{{items}}"
+      wx:key="key"
+      class="tabbar__item {{item.primary ? 'tabbar__item--primary' : ''}} {{selected === index ? 'tabbar__item--active' : ''}}"
+      data-index="{{index}}"
+      data-path="{{item.path}}"
+      bindtap="switchTab"
+      hover-class="tabbar__item--pressed"
+      role="button"
+      aria-label="{{item.label}}"
+    >
+      <view class="tabbar__icon {{item.primary ? 'tabbar__icon--primary' : ''}}">{{item.icon}}</view>
+      <text class="tabbar__label" wx:if="{{!item.primary}}">{{item.label}}</text>
+    </view>
+  </view>
+  <view class="tabbar-safe"></view>
+</view>

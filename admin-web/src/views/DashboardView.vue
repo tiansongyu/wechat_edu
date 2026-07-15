@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { api } from "../api/client";
+import { ElMessage } from "element-plus";
+import { api, getApiErrorMessage } from "../api/client";
 
 const loading = ref(true);
 const metrics = ref<Record<string, number>>({});
@@ -17,6 +18,8 @@ onMounted(async () => {
     const { data } = await api.get("/dashboard");
     metrics.value = data.metrics;
     distribution.value = data.jobStatusDistribution;
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, "看板数据加载失败"));
   } finally {
     loading.value = false;
   }

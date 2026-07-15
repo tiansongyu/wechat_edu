@@ -1,19 +1,21 @@
 # 家教直聘全栈系统
 
-一个包含家长端、老师端、管理员后台和完整 Docker 基础设施的家教匹配系统。微信小程序使用同一个 AppID，通过角色切换进入家长版或老师版；服务端采用 NestJS、PostgreSQL/PostGIS、Redis/BullMQ、MinIO 和 Vue 3。
+一个包含家长端、老师端、管理员后台和完整 Docker 基础设施的家教匹配系统。微信小程序使用同一个 AppID，通过角色切换进入家长版或老师版；服务端采用 NestJS、PostgreSQL/PostGIS、Redis/BullMQ、MinIO 和 Vue 3。PostgreSQL 是全部业务状态的唯一真相源，小程序不会用本地模拟数据替代接口结果。
 
 ## 已实现
 
-- 微信登录、Access Token、旋转 Refresh Token、会话撤销
-- 同一微信账号的家长/老师双角色切换
+- 微信登录、稳定设备标识、Access Token、旋转 Refresh Token、会话撤销
+- 同一微信账号的家长/老师双角色切换，接口按当前 `activeRole` 授权
 - 家长发布需求、老师发布求带、管理员内容审核
 - 教师资料、认证材料及管理员认证审核
-- 需求筛选、详情、地图坐标、收藏和游标分页
-- 老师报名、家长接受/拒绝、合作记录
-- 幂等报名、唯一约束、串行化事务、名额锁定
-- 通知、会话、幂等消息和 Outbox 异步事件
+- 需求筛选、详情、地图附近查询、收藏、关闭与重新提交审核
+- 老师报名、取消后重报，家长统一查看报名并执行接受/拒绝
+- 预约履约的确认、完成、取消和争议状态流转
+- 幂等报名、唯一约束、串行化事务、名额锁定及操作原因留痕
+- 数据库用户偏好、通知、会话未读数、聊天已读、幂等消息和 Outbox 异步事件
 - MinIO 私有文件上传签名
-- Vue 管理后台：看板、用户、教师审核、发布审核、审计日志
+- Vue 管理后台：看板、用户、教师审核、发布审核、报名/预约履约、审计日志
+- 管理后台 Access Token 过期时自动单次刷新并重放原请求
 - Nginx、PgBouncer、PostGIS、Redis、MinIO 的 Docker Compose 部署
 
 ## 系统组成
@@ -27,6 +29,12 @@ Vue 管理后台 ┘                    │
 ```
 
 详细设计见 [系统架构](docs/architecture.md) 和 [部署说明](docs/deployment.md)。
+
+## 数据来源与本地缓存边界
+
+资料、发布、收藏、报名、预约、聊天、通知和用户偏好均通过 API 读写 PostgreSQL。Redis 仅用于队列、短期缓存和协调，不能替代数据库中的业务记录；MinIO 保存私有文件对象，其对象键和审核状态仍由数据库关联。
+
+微信小程序本地只保存 `accessToken`、`refreshToken`、当前 `activeRole` 和稳定 `deviceId`。页面进入或重试时从接口重新获取数据，不保留发布、报名、预约、消息等本地业务副本。
 
 ## 本地启动
 
@@ -46,10 +54,13 @@ DOCKER_BUILD_PROXY=http://host.docker.internal:7897 docker compose up -d --build
 
 启动后：
 
-- 管理后台：<http://localhost:8080>
-- Swagger API：<http://localhost:8080/docs>
-- API 健康检查：<http://localhost:8080/health>
-- MinIO 控制台：<http://localhost:9001>
+- 管理后台：<http://localhost:4000>
+- Swagger API：<http://localhost:4000/docs>
+- API 健康检查：<http://localhost:4000/health>
+- PostgreSQL：`localhost:4001`
+- Redis：`localhost:4002`
+- MinIO API：<http://localhost:4003>
+- MinIO 控制台：<http://localhost:4004>
 
 本地默认管理员账号来自 `.env`：
 
@@ -64,7 +75,7 @@ DOCKER_BUILD_PROXY=http://host.docker.internal:7897 docker compose up -d --build
 
 1. 使用微信开发者工具导入仓库根目录。
 2. 当前 AppID 已配置为 `wx02054be10e52aff0`。
-3. 开发者工具中可使用 `http://127.0.0.1:8080` 调试。
+3. 开发者工具中可使用 `http://127.0.0.1:4000` 调试。
 4. 真机或发布版本需要修改 [`utils/config.js`](utils/config.js) 为已备案的 HTTPS API 域名。
 5. 在微信公众平台配置相同的 `request` 合法域名。
 6. 正式环境设置 `WECHAT_APP_SECRET`，并将 `WECHAT_LOGIN_MOCK=false`。
@@ -76,9 +87,12 @@ Docker 负责部署 API、管理后台和数据服务；微信小程序本身仍
 ```bash
 node tests/smoke.js
 node tests/architecture.js
+node tests/mini-api-e2e.mjs  # Docker 服务启动后，回归原有小程序接口
+node tests/workflow-e2e.mjs  # 验证角色权限、取消/重报、履约状态机和后台操作
 
 cd backend
 npm run build
+npm run lint
 
 cd ../admin-web
 npm run build
@@ -93,7 +107,7 @@ docker compose config --quiet
 .
 ├── pages/                     # 微信小程序页面
 ├── components/                # 小程序组件
-├── utils/                     # API、鉴权、本地回退数据
+├── utils/                     # API、鉴权和本地会话辅助（不保存业务数据）
 ├── backend/                   # NestJS API、Worker、Prisma
 │   ├── prisma/                # Schema、迁移、种子数据
 │   └── src/modules/           # 业务模块

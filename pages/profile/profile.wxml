@@ -1,127 +1,25 @@
 <view class="page-with-tabbar profile-page">
   <view class="profile-hero">
     <view class="profile-hero__glow"></view>
-    <view class="profile-user">
-      <view class="profile-avatar">人</view>
-      <view class="profile-user__main">
-        <view class="profile-user__name-row">
-          <text class="profile-user__name">{{account && account.nickname ? account.nickname : '微信用户'}}</text>
-          <text class="profile-user__verified">{{roleName}}</text>
-        </view>
-        <text class="profile-user__meta">深圳 · 大学生家教</text>
-      </view>
-      <view class="profile-edit" bindtap="improveProfile">编辑资料</view>
-    </view>
-
-    <view class="credit-card" bindtap="showCredit" hover-class="credit-card--pressed">
-      <view>
-        <text class="credit-card__eyebrow">平台信誉值</text>
-        <view class="credit-card__score-row">
-          <text class="credit-card__score">92</text>
-          <text class="credit-card__level">优秀</text>
-        </view>
-      </view>
-      <view class="credit-card__progress-wrap">
-        <view class="credit-card__progress-copy">
-          <text>资料完整度</text>
-          <text>80%</text>
-        </view>
-        <view class="credit-card__track"><view class="credit-card__fill"></view></view>
-        <text class="credit-card__hint">再完善一项教育经历可提升排名 →</text>
-      </view>
-    </view>
+    <view class="profile-user" wx:if="{{account}}"><image wx:if="{{account.avatarUrl}}" class="profile-avatar profile-avatar--image" src="{{account.avatarUrl}}" mode="aspectFill" /><view wx:else class="profile-avatar">{{accountInitial}}</view><view class="profile-user__main"><view class="profile-user__name-row"><text class="profile-user__name">{{account.nickname || '微信用户'}}</text><text class="profile-user__verified">{{roleName}}</text></view><text class="profile-user__meta">{{profileMeta}}</text></view><view class="profile-edit" bindtap="improveProfile">编辑资料</view></view>
+    <view class="credit-card" bindtap="improveProfile"><view><text class="credit-card__eyebrow">{{metricTitle}}</text><view class="credit-card__score-row"><text class="credit-card__score">{{metricValue}}</text></view></view><view class="credit-card__progress-wrap"><text class="credit-card__hint">{{metricHint}} →</text><text class="audit-note" wx:if="{{auditNote}}">审核意见：{{auditNote}}</text></view></view>
   </view>
-
   <view class="profile-content">
-    <view class="role-switch-card" bindtap="switchRole" hover-class="role-switch-card--pressed">
-      <view class="role-switch-card__icon">{{activeRole === 'TEACHER' ? '🎓' : '⌂'}}</view>
-      <view class="role-switch-card__main">
-        <text class="role-switch-card__title">当前使用{{roleName}}</text>
-        <text class="role-switch-card__copy">{{activeRole === 'TEACHER' ? '浏览需求、报名家教并管理认证' : '发布需求、挑选老师并处理报名'}}</text>
-      </view>
-      <text class="role-switch-card__action">切换{{activeRole === 'TEACHER' ? '家长' : '老师'}}版 ›</text>
-    </view>
-    <view class="stats-card">
-      <view class="stat-item {{activePanel === 'applications' ? 'stat-item--active' : ''}}" data-panel="applications" bindtap="selectPanel">
-        <text class="stat-item__value">{{applications.length}}</text>
-        <text class="stat-item__label">我的申请</text>
-      </view>
-      <view class="stat-divider"></view>
-      <view class="stat-item {{activePanel === 'favorites' ? 'stat-item--active' : ''}}" data-panel="favorites" bindtap="selectPanel">
-        <text class="stat-item__value">{{favorites.length}}</text>
-        <text class="stat-item__label">我的收藏</text>
-      </view>
-      <view class="stat-divider"></view>
-      <view class="stat-item {{activePanel === 'posts' ? 'stat-item--active' : ''}}" data-panel="posts" bindtap="selectPanel">
-        <text class="stat-item__value">{{posts.length}}</text>
-        <text class="stat-item__label">我的发布</text>
-      </view>
-    </view>
-
-    <view class="profile-section">
-      <view class="profile-section__head">
-        <text class="profile-section__title">{{panelTitle}}</text>
-        <text class="profile-section__more">共 {{visibleItems.length}} 条</text>
-      </view>
-      <view class="profile-item" wx:for="{{visibleItems}}" wx:key="id" data-id="{{item.id}}" bindtap="openItem" hover-class="profile-item--pressed">
-        <view class="profile-item__icon">{{activePanel === 'applications' ? '⌁' : activePanel === 'favorites' ? '♡' : '＋'}}</view>
-        <view class="profile-item__main">
-          <text class="profile-item__title">{{item.title}}</text>
-          <text class="profile-item__meta" wx:if="{{activePanel !== 'posts'}}">{{item.district}} · ¥{{item.price}}{{item.unit}}</text>
-          <text class="profile-item__meta" wx:else>{{item.district}} · {{item.grade}} · ¥{{item.price}}/小时</text>
+    <view class="profile-state" wx:if="{{loading}}"><view class="profile-spinner"></view><text>正在加载个人数据...</text></view>
+    <view class="profile-state" wx:elif="{{error}}"><text class="profile-state__title">加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
+    <block wx:else>
+      <view class="role-switch-card" bindtap="switchRole"><view class="role-switch-card__icon">{{activeRole === 'TEACHER' ? '🎓' : '⌂'}}</view><view class="role-switch-card__main"><text class="role-switch-card__title">当前使用{{roleName}}</text><text class="role-switch-card__copy">{{activeRole === 'TEACHER' ? '浏览需求并管理我的申请' : '发布需求并处理老师报名'}}</text></view><text class="role-switch-card__action">{{actionId === 'role' ? '切换中' : '切换 ›'}}</text></view>
+      <scroll-view class="stats-scroll" scroll-x enhanced show-scrollbar="false"><view class="stats-card stats-card--four"><view class="stat-item {{activePanel === 'applications' ? 'stat-item--active' : ''}}" data-panel="applications" bindtap="selectPanel"><text class="stat-item__value">{{applications.length}}</text><text class="stat-item__label">报名</text></view><view class="stat-item {{activePanel === 'favorites' ? 'stat-item--active' : ''}}" data-panel="favorites" bindtap="selectPanel"><text class="stat-item__value">{{favorites.length}}</text><text class="stat-item__label">收藏</text></view><view class="stat-item {{activePanel === 'posts' ? 'stat-item--active' : ''}}" data-panel="posts" bindtap="selectPanel"><text class="stat-item__value">{{posts.length}}</text><text class="stat-item__label">发布</text></view><view class="stat-item {{activePanel === 'appointments' ? 'stat-item--active' : ''}}" data-panel="appointments" bindtap="selectPanel"><text class="stat-item__value">{{appointments.length}}</text><text class="stat-item__label">预约</text></view></view></scroll-view>
+      <view class="profile-section"><view class="profile-section__head"><text class="profile-section__title">{{panelTitle}}</text><text class="profile-section__more">共 {{visibleItems.length}} 条</text></view>
+        <view class="profile-item" wx:for="{{visibleItems}}" wx:key="id" data-id="{{item.id}}" bindtap="openItem"><view class="profile-item__icon">{{activePanel === 'applications' ? '申' : activePanel === 'favorites' ? '♡' : activePanel === 'posts' ? '发' : '约'}}</view><view class="profile-item__main"><text class="profile-item__title">{{item.title}}</text><text class="profile-item__meta">{{item.meta || item.locationLabel || ''}}</text><text class="profile-item__note" wx:if="{{item.statusNote}}">{{item.statusNote}}</text></view><text class="profile-item__status">{{item.statusLabel || '查看'}}</text>
+          <button wx:if="{{activePanel === 'applications' && activeRole === 'TEACHER' && item.status === 'PENDING'}}" class="inline-danger" data-id="{{item.id}}" catchtap="cancelApplication">{{actionId === item.id ? '处理中' : '取消'}}</button>
+          <view class="appointment-actions" wx:if="{{activePanel === 'appointments' && (item.canConfirm || item.canComplete || item.canCancel || item.canDispute)}}"><button wx:if="{{item.canConfirm}}" data-id="{{item.id}}" data-action="confirm" catchtap="appointmentAction">确认</button><button wx:if="{{item.canComplete}}" data-id="{{item.id}}" data-action="complete" catchtap="appointmentAction">完成</button><button wx:if="{{item.canDispute}}" class="danger" data-id="{{item.id}}" data-action="dispute" catchtap="appointmentAction">争议</button><button wx:if="{{item.canCancel}}" class="danger" data-id="{{item.id}}" data-action="cancel" catchtap="appointmentAction">取消</button></view>
         </view>
-        <text class="profile-item__status">{{activePanel === 'applications' ? item.status : activePanel === 'posts' ? item.status : '查看'}}</text>
+        <view class="profile-empty" wx:if="{{!visibleItems.length}}"><view class="profile-empty__icon">✦</view><text>数据库中暂无{{panelTitle}}</text></view>
       </view>
-      <view class="profile-empty" wx:if="{{!visibleItems.length}}">
-        <view class="profile-empty__icon">✦</view>
-        <text>暂无{{panelTitle}}，去首页看看新机会吧</text>
-      </view>
-    </view>
-
-    <view class="menu-card">
-      <view class="menu-item" bindtap="improveProfile">
-        <view class="menu-item__icon menu-item__icon--blue">▤</view>
-        <view class="menu-item__main">
-          <text class="menu-item__title">教育与认证资料</text>
-          <text class="menu-item__copy">已完成 4 / 5 项</text>
-        </view>
-        <text class="menu-item__arrow">›</text>
-      </view>
-      <view class="menu-item" bindtap="contactSupport">
-        <view class="menu-item__icon menu-item__icon--green">◌</view>
-        <view class="menu-item__main">
-          <text class="menu-item__title">平台客服与帮助</text>
-          <text class="menu-item__copy">服务时间 09:00–21:00</text>
-        </view>
-        <text class="menu-item__arrow">›</text>
-      </view>
-      <view class="menu-item" bindtap="toggleSettings">
-        <view class="menu-item__icon menu-item__icon--purple">⚙</view>
-        <view class="menu-item__main">
-          <text class="menu-item__title">通知与隐私设置</text>
-          <text class="menu-item__copy">派单提醒、聊天与信息保护</text>
-        </view>
-        <text class="menu-item__arrow">{{showSettings ? '⌃' : '›'}}</text>
-      </view>
-    </view>
-
-    <view class="settings-card" wx:if="{{showSettings}}">
-      <view class="setting-row">
-        <view><text class="setting-row__title">好单派送提醒</text><text class="setting-row__copy">匹配新单时即时通知</text></view>
-        <switch color="#3478f6" checked="{{settings.jobNotice}}" data-field="jobNotice" bindchange="updateSetting" />
-      </view>
-      <view class="setting-row">
-        <view><text class="setting-row__title">顾问消息提醒</text><text class="setting-row__copy">申请进度和沟通消息</text></view>
-        <switch color="#3478f6" checked="{{settings.chatNotice}}" data-field="chatNotice" bindchange="updateSetting" />
-      </view>
-      <view class="setting-row">
-        <view><text class="setting-row__title">隐私保护模式</text><text class="setting-row__copy">匹配前隐藏联系方式</text></view>
-        <switch color="#3478f6" checked="{{settings.privacyMode}}" data-field="privacyMode" bindchange="updateSetting" />
-      </view>
-    </view>
-
-    <text class="profile-version">家教直聘 · 让每一次匹配更可靠</text>
+      <view class="menu-card"><view class="menu-item" bindtap="improveProfile"><view class="menu-item__icon menu-item__icon--blue">▤</view><view class="menu-item__main"><text class="menu-item__title">身份与匹配资料</text><text class="menu-item__copy">查看并完善数据库资料</text></view><text class="menu-item__arrow">›</text></view><view class="menu-item" bindtap="toggleSettings"><view class="menu-item__icon menu-item__icon--purple">⚙</view><view class="menu-item__main"><text class="menu-item__title">通知与隐私偏好</text><text class="menu-item__copy">设置会同步保存到账号</text></view><text class="menu-item__arrow">{{showSettings ? '⌃' : '›'}}</text></view></view>
+      <view class="settings-card" wx:if="{{showSettings}}"><view class="setting-row"><view><text class="setting-row__title">业务状态提醒</text><text class="setting-row__copy">接收审核、报名和预约状态通知</text></view><switch color="#3478f6" checked="{{settings.jobNotice}}" data-field="jobNotice" bindchange="updateSetting" /></view><view class="setting-row"><view><text class="setting-row__title">会话未读提示</text><text class="setting-row__copy">在消息页显示未读会话数量</text></view><switch color="#3478f6" checked="{{settings.chatNotice}}" data-field="chatNotice" bindchange="updateSetting" /></view><view class="setting-row"><view><text class="setting-row__title">地址隐私保护</text><text class="setting-row__copy">匹配成功前隐藏详细地址并降低地图精度</text></view><switch color="#3478f6" checked="{{settings.privacyMode}}" data-field="privacyMode" bindchange="updateSetting" /></view></view>
+      <view class="parent-editor" wx:if="{{showParentEditor}}"><view class="parent-editor__head"><text>完善家长资料</text><text bindtap="closeParentEditor">关闭</text></view><input value="{{parentForm.city}}" data-field="city" placeholder="城市，例如：深圳" bindinput="handleParentInput" /><input value="{{parentForm.district}}" data-field="district" placeholder="常用区域，例如：南山区" bindinput="handleParentInput" /><input value="{{parentForm.address}}" data-field="address" placeholder="常用授课地址（可选）" bindinput="handleParentInput" /><button loading="{{savingParent}}" bindtap="saveParentProfile">保存资料</button></view>
+    </block>
   </view>
-
-  <app-tabbar current="profile"></app-tabbar>
 </view>

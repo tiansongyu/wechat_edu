@@ -18,6 +18,15 @@ button::after {
   border: 0;
 }
 
+button[disabled] {
+  opacity: 0.58;
+}
+
+input,
+textarea {
+  caret-color: #3478f6;
+}
+
 .page-with-tabbar {
   min-height: 100vh;
   padding-bottom: calc(150rpx + env(safe-area-inset-bottom));

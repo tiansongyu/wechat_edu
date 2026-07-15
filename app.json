@@ -6,7 +6,9 @@
     "pages/messages/messages",
     "pages/profile/profile",
     "pages/teacher-profile/teacher-profile",
-    "pages/job-detail/job-detail"
+    "pages/job-detail/job-detail",
+    "pages/job-applications/job-applications",
+    "pages/conversation/conversation"
   ],
   "window": {
     "navigationBarBackgroundColor": "#f6f7fb",
@@ -14,6 +16,49 @@
     "navigationBarTitleText": "家教直聘",
     "backgroundColor": "#f6f7fb",
     "backgroundTextStyle": "dark"
+  },
+  "networkTimeout": {
+    "request": 15000,
+    "uploadFile": 30000,
+    "downloadFile": 30000
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于按真实距离展示附近家教信息，并在发布时选择授课地点"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation",
+    "chooseLocation"
+  ],
+  "tabBar": {
+    "custom": true,
+    "color": "#a5abba",
+    "selectedColor": "#277bf4",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/map/map",
+        "text": "地图寻单"
+      },
+      {
+        "pagePath": "pages/publish/publish",
+        "text": "发布"
+      },
+      {
+        "pagePath": "pages/messages/messages",
+        "text": "消息"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

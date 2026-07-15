@@ -1,0 +1,137 @@
+<view class="applications-page">
+  <view class="applications-hero">
+    <view class="applications-hero__orb applications-hero__orb--one"></view>
+    <view class="applications-hero__orb applications-hero__orb--two"></view>
+    <view class="applications-hero__content">
+      <text class="applications-hero__eyebrow">家长端 · 报名管理</text>
+      <text class="applications-hero__title">{{jobTitle}}</text>
+      <view class="applications-stats">
+        <view class="applications-stat">
+          <text class="applications-stat__value">{{stats.total}}</text>
+          <text class="applications-stat__label">全部报名</text>
+        </view>
+        <view class="applications-stat__divider"></view>
+        <view class="applications-stat">
+          <text class="applications-stat__value">{{stats.pending}}</text>
+          <text class="applications-stat__label">待处理</text>
+        </view>
+        <view class="applications-stat__divider"></view>
+        <view class="applications-stat">
+          <text class="applications-stat__value">{{stats.accepted}}</text>
+          <text class="applications-stat__label">已接受</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="applications-content">
+    <view class="sync-strip" wx:if="{{refreshing}}">
+      <view class="sync-strip__spinner"></view>
+      <text>正在同步最新报名状态</text>
+    </view>
+
+    <view class="error-strip" wx:if="{{loadError && applications.length}}">
+      <view class="error-strip__main">
+        <text class="error-strip__title">列表同步失败</text>
+        <text class="error-strip__copy">{{loadError}}</text>
+      </view>
+      <button class="error-strip__action" bindtap="retryLoad">重试</button>
+    </view>
+
+    <view class="loading-state" wx:if="{{loading && !applications.length}}">
+      <view class="loading-state__spinner"></view>
+      <text class="loading-state__title">正在读取报名记录</text>
+      <text class="loading-state__copy">老师资料与报名状态均来自平台数据库</text>
+    </view>
+
+    <view class="error-state" wx:elif="{{loadError && !applications.length}}">
+      <view class="state-icon state-icon--error">!</view>
+      <text class="state-title">暂时无法加载</text>
+      <text class="state-copy">{{loadError}}</text>
+      <button wx:if="{{jobId}}" class="state-button" bindtap="retryLoad">重新加载</button>
+    </view>
+
+    <view class="empty-state" wx:elif="{{!applications.length}}">
+      <view class="state-icon">⌁</view>
+      <text class="state-title">还没有老师报名</text>
+      <text class="state-copy">收到新的报名后，会在这里展示老师资料并等待你处理。</text>
+    </view>
+
+    <view class="application-list" wx:else>
+      <view class="application-card" wx:for="{{applications}}" wx:key="id">
+        <view class="application-card__top">
+          <image
+            wx:if="{{item.avatarUrl}}"
+            class="application-card__avatar"
+            src="{{item.avatarUrl}}"
+            mode="aspectFill"
+          ></image>
+          <view wx:else class="application-card__avatar application-card__avatar--fallback">{{item.avatarText}}</view>
+          <view class="application-card__identity">
+            <view class="application-card__name-row">
+              <text class="application-card__name">{{item.displayName}}</text>
+              <text class="application-card__verified">{{item.auditLabel}}</text>
+            </view>
+            <text class="application-card__school">{{item.schoolLine}}</text>
+          </view>
+          <text class="application-card__status application-card__status--{{item.statusTone}}">{{item.statusLabel}}</text>
+        </view>
+
+        <view class="application-card__facts">
+          <text class="application-fact">{{item.teachingLabel}}</text>
+          <text class="application-fact" wx:if="{{item.scoreLabel}}">{{item.scoreLabel}}</text>
+          <text class="application-fact">报名于 {{item.createdLabel}}</text>
+        </view>
+
+        <view class="application-card__subjects" wx:if="{{item.subjects.length}}">
+          <text class="subject-tag" wx:for="{{item.subjects}}" wx:for-item="subject" wx:key="*this">{{subject}}</text>
+        </view>
+
+        <view class="application-card__statement" wx:if="{{item.coverLetter}}">
+          <text class="application-card__statement-label">报名说明</text>
+          <text class="application-card__statement-copy">{{item.coverLetter}}</text>
+        </view>
+
+        <view class="application-card__statement" wx:if="{{item.bio}}">
+          <text class="application-card__statement-label">老师简介</text>
+          <text class="application-card__statement-copy">{{item.bio}}</text>
+        </view>
+
+        <view class="application-card__handled" wx:if="{{item.status !== 'PENDING' && item.handledLabel}}">
+          处理时间：{{item.handledLabel}}
+        </view>
+        <view class="application-card__statement" wx:if="{{item.statusNote}}">
+          <text class="application-card__statement-label">处理说明</text>
+          <text class="application-card__statement-copy">{{item.statusNote}}</text>
+        </view>
+
+        <view class="application-card__actions" wx:if="{{item.status === 'PENDING'}}">
+          <button
+            class="application-action application-action--reject"
+            data-id="{{item.id}}"
+            data-action="reject"
+            bindtap="handleApplication"
+            loading="{{actionId === item.id && actionType === 'reject'}}"
+            disabled="{{actionId || syncRequired}}"
+          >拒绝</button>
+          <button
+            class="application-action application-action--accept"
+            data-id="{{item.id}}"
+            data-action="accept"
+            bindtap="handleApplication"
+            loading="{{actionId === item.id && actionType === 'accept'}}"
+            disabled="{{actionId || syncRequired}}"
+          >接受报名</button>
+        </view>
+        <view class="application-card__actions" wx:elif="{{item.status === 'ACCEPTED'}}">
+          <button class="application-action application-action--accept" data-id="{{item.id}}" bindtap="contactTeacher" loading="{{actionId === item.id && actionType === 'contact'}}" disabled="{{actionId}}">联系已录用老师</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="applications-tip" wx:if="{{applications.length}}">
+      <text class="applications-tip__icon">✓</text>
+      <text>接受或拒绝后将立即写入平台数据库，并通知报名老师。</text>
+    </view>
+  </view>
+</view>

@@ -1,10 +1,18 @@
 import { defineStore } from "pinia";
-import { api } from "../api/client";
+import { api, clearAdminSession } from "../api/client";
+
+function readStoredAccount() {
+  try {
+    return JSON.parse(localStorage.getItem("tutor_admin_account") || "null");
+  } catch {
+    return null;
+  }
+}
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     accessToken: localStorage.getItem("tutor_admin_access_token") || "",
-    account: null as null | { nickname: string; username?: string }
+    account: readStoredAccount() as null | { nickname: string; username?: string }
   }),
   getters: {
     loggedIn: (state) => Boolean(state.accessToken)
@@ -16,12 +24,13 @@ export const useAuthStore = defineStore("auth", {
       this.account = data.account;
       localStorage.setItem("tutor_admin_access_token", data.accessToken);
       localStorage.setItem("tutor_admin_refresh_token", data.refreshToken);
+      localStorage.setItem("tutor_admin_account", JSON.stringify(data.account));
     },
     logout() {
       this.accessToken = "";
       this.account = null;
-      localStorage.removeItem("tutor_admin_access_token");
-      localStorage.removeItem("tutor_admin_refresh_token");
+      clearAdminSession();
+      localStorage.removeItem("tutor_admin_account");
     }
   }
 });

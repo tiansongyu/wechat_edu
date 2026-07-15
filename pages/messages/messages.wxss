@@ -282,3 +282,8 @@
   background: #6f7c91;
   border-radius: 50%;
 }
+
+.messages-header__action { width: auto; margin: 0; padding: 10rpx 18rpx; line-height: 1.4; background: rgba(255,255,255,.14); border-radius: 999rpx; }
+.messages-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 360rpx; padding: 40rpx; color: #7d8798; font-size: 24rpx; text-align: center; }.messages-state__title { margin-bottom: 12rpx; color: #27334a; font-size: 31rpx; font-weight: 700; }.messages-state button { margin-top: 26rpx; color: #fff; font-size: 23rpx; background: #3478f6; border-radius: 999rpx; }.messages-spinner { width: 44rpx; height: 44rpx; margin-bottom: 18rpx; border: 5rpx solid #dce6f8; border-top-color: #3478f6; border-radius: 50%; animation: messages-spin 800ms linear infinite; } @keyframes messages-spin { to { transform: rotate(360deg); } }
+.message-card__avatar--image { padding: 0; overflow: hidden; }.message-card__dot { min-width: 16rpx; padding: 2rpx 5rpx; color: #fff; font-size: 15rpx; text-align: center; }
+@media (max-width: 340px) { .message-tools { gap: 12rpx; }.message-tool { padding: 18rpx 14rpx; }.message-card { padding-right: 16rpx; padding-left: 16rpx; } }
