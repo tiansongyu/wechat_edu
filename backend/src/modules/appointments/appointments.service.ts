@@ -1,12 +1,40 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { createHash } from "crypto";
 import { ApplicationStatus, AppointmentStatus, RoleCode } from "../../generated/prisma/enums";
 import { PrismaService } from "../../prisma/prisma.service";
 
-type AppointmentCommand = "confirm" | "cancel" | "dispute";
+type AppointmentCommand = "confirm" | "complete" | "cancel" | "dispute";
 
 @Injectable()
 export class AppointmentsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private normalizeCommand(
+    command: AppointmentCommand,
+    idempotencyKey: string,
+    activeRole?: RoleCode,
+    reason?: string
+  ) {
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 128) {
+      throw new BadRequestException("缺少有效的 Idempotency-Key 请求头");
+    }
+    const normalizedReason = reason?.trim() || null;
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify({ command, activeRole: activeRole || null, reason: normalizedReason }))
+      .digest("hex");
+    return { key, normalizedReason, requestHash };
+  }
+
+  private assertMatchingCommand(storedHash: string | null, requestHash: string) {
+    if (!storedHash || storedHash !== requestHash) {
+      throw new ConflictException("Idempotency-Key 已用于不同的预约操作");
+    }
+  }
+
+  private presentCommandResponse<T>(record: T): T {
+    return JSON.parse(JSON.stringify(record)) as T;
+  }
 
   async list(accountId: string, activeRole?: RoleCode) {
     const appointments = await this.prisma.appointment.findMany({
@@ -137,23 +165,31 @@ export class AppointmentsService {
     });
   }
 
-  confirm(actorId: string, appointmentId: string, reason?: string) {
-    return this.transition(actorId, appointmentId, "confirm", reason);
+  confirm(actorId: string, appointmentId: string, reason: string | undefined, activeRole: RoleCode, idempotencyKey: string) {
+    return this.transition(actorId, appointmentId, "confirm", reason, activeRole, idempotencyKey);
   }
 
-  complete(actorId: string, appointmentId: string, reason?: string, activeRole?: RoleCode) {
-    return this.acknowledgeCompletion(actorId, appointmentId, reason, activeRole);
+  complete(actorId: string, appointmentId: string, reason: string | undefined, activeRole: RoleCode, idempotencyKey: string) {
+    return this.acknowledgeCompletion(actorId, appointmentId, reason, activeRole, idempotencyKey);
   }
 
-  cancel(actorId: string, appointmentId: string, reason?: string) {
-    return this.transition(actorId, appointmentId, "cancel", reason);
+  cancel(actorId: string, appointmentId: string, reason: string | undefined, activeRole: RoleCode, idempotencyKey: string) {
+    return this.transition(actorId, appointmentId, "cancel", reason, activeRole, idempotencyKey);
   }
 
-  dispute(actorId: string, appointmentId: string, reason?: string) {
-    return this.transition(actorId, appointmentId, "dispute", reason);
+  dispute(actorId: string, appointmentId: string, reason: string | undefined, activeRole: RoleCode, idempotencyKey: string) {
+    return this.transition(actorId, appointmentId, "dispute", reason, activeRole, idempotencyKey);
   }
 
-  private acknowledgeCompletion(actorId: string, appointmentId: string, reason?: string, activeRole?: RoleCode) {
+  private acknowledgeCompletion(
+    actorId: string,
+    appointmentId: string,
+    reason: string | undefined,
+    activeRole: RoleCode,
+    idempotencyKey: string
+  ) {
+    const normalized = this.normalizeCommand("complete", idempotencyKey, activeRole, reason);
+    const scope = `appointment-command:${appointmentId}`;
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
@@ -167,13 +203,18 @@ export class AppointmentsService {
       if (!isOwner && !isTeacher) throw new ForbiddenException("无权处理该预约");
 
       let completionRole: RoleCode;
-      if (activeRole !== undefined) {
-        if (activeRole === RoleCode.PARENT && isOwner) completionRole = RoleCode.PARENT;
-        else if (activeRole === RoleCode.TEACHER && isTeacher) completionRole = RoleCode.TEACHER;
-        else throw new ForbiddenException("请切换到该预约对应的身份后确认完成");
-      } else {
-        completionRole = isOwner ? RoleCode.PARENT : RoleCode.TEACHER;
+      if (activeRole === RoleCode.PARENT && isOwner) completionRole = RoleCode.PARENT;
+      else if (activeRole === RoleCode.TEACHER && isTeacher) completionRole = RoleCode.TEACHER;
+      else throw new ForbiddenException("请切换到该预约对应的身份后确认完成");
+
+      const existingKey = await tx.idempotencyRecord.findUnique({
+        where: { actorId_scope_key: { actorId, scope, key: normalized.key } }
+      });
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        this.assertMatchingCommand(existingKey.requestHash, normalized.requestHash);
+        return existingKey.response;
       }
+      if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
 
       const alreadyAcknowledged = completionRole === RoleCode.PARENT
         ? appointment.parentCompletedAt !== null
@@ -191,7 +232,6 @@ export class AppointmentsService {
         ? appointment.teacherCompletedAt !== null
         : appointment.parentCompletedAt !== null;
       const isFullyAcknowledged = otherPartyAcknowledged;
-      const trimmedReason = reason?.trim() || null;
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: {
@@ -200,7 +240,7 @@ export class AppointmentsService {
             : { teacherCompletedAt: acknowledgedAt }),
           status: isFullyAcknowledged ? AppointmentStatus.COMPLETED : AppointmentStatus.CONFIRMED,
           completedAt: isFullyAcknowledged ? acknowledgedAt : appointment.completedAt,
-          statusNote: trimmedReason ?? appointment.statusNote,
+          statusNote: normalized.normalizedReason ?? appointment.statusNote,
           handledAt: acknowledgedAt,
           version: { increment: 1 }
         }
@@ -220,7 +260,7 @@ export class AppointmentsService {
             teacherId: appointment.application.teacherId,
             actorId,
             completionRole,
-            reason: trimmedReason
+            reason: normalized.normalizedReason
           }
         }
       });
@@ -246,11 +286,31 @@ export class AppointmentsService {
           }
         }
       });
-      return updated;
+      const response = this.presentCommandResponse(updated);
+      await tx.idempotencyRecord.create({
+        data: {
+          actorId,
+          scope,
+          key: normalized.key,
+          requestHash: normalized.requestHash,
+          response,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+      return response;
     });
   }
 
-  private transition(actorId: string, appointmentId: string, command: AppointmentCommand, reason?: string) {
+  private transition(
+    actorId: string,
+    appointmentId: string,
+    command: Exclude<AppointmentCommand, "complete">,
+    reason: string | undefined,
+    activeRole: RoleCode,
+    idempotencyKey: string
+  ) {
+    const normalized = this.normalizeCommand(command, idempotencyKey, activeRole, reason);
+    const scope = `appointment-command:${appointmentId}`;
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
@@ -263,16 +323,37 @@ export class AppointmentsService {
       const isTeacher = appointment.application.teacherId === actorId;
       if (!isOwner && !isTeacher) throw new ForbiddenException("无权处理该预约");
       if (command === "confirm" && !isTeacher) throw new ForbiddenException("只有报名教师可以确认预约");
-      if ((command === "cancel" || command === "dispute") && !reason?.trim()) {
+      if (command === "confirm" && activeRole !== RoleCode.TEACHER) {
+        throw new ForbiddenException("请切换到老师身份后确认预约");
+      }
+      if (
+        (command === "cancel" || command === "dispute") &&
+        !(
+          (activeRole === RoleCode.PARENT && isOwner) ||
+          (activeRole === RoleCode.TEACHER && isTeacher)
+        )
+      ) {
+        throw new ForbiddenException("请切换到该预约对应的身份后操作");
+      }
+      if ((command === "cancel" || command === "dispute") && !normalized.normalizedReason) {
         throw new BadRequestException(command === "cancel" ? "取消预约必须填写原因" : "发起争议必须填写原因");
       }
+
+      const existingKey = await tx.idempotencyRecord.findUnique({
+        where: { actorId_scope_key: { actorId, scope, key: normalized.key } }
+      });
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        this.assertMatchingCommand(existingKey.requestHash, normalized.requestHash);
+        return existingKey.response;
+      }
+      if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
 
       const nextStatus = this.nextStatus(appointment.status, command);
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: {
           status: nextStatus,
-          statusNote: reason?.trim() || null,
+          statusNote: normalized.normalizedReason,
           handledAt: new Date(),
           version: { increment: 1 }
         }
@@ -283,7 +364,7 @@ export class AppointmentsService {
           where: { id: appointment.applicationId },
           data: {
             status: ApplicationStatus.CANCELLED,
-            statusNote: reason?.trim() || "预约已取消",
+            statusNote: normalized.normalizedReason || "预约已取消",
             handledAt: new Date(),
             version: { increment: 1 }
           }
@@ -302,7 +383,7 @@ export class AppointmentsService {
             ownerId: appointment.job.ownerId,
             teacherId: appointment.application.teacherId,
             actorId,
-            reason: reason?.trim() || null
+            reason: normalized.normalizedReason
           }
         }
       });
@@ -316,12 +397,23 @@ export class AppointmentsService {
           after: { status: updated.status, version: updated.version, reason: updated.statusNote }
         }
       });
-      return updated;
+      const response = this.presentCommandResponse(updated);
+      await tx.idempotencyRecord.create({
+        data: {
+          actorId,
+          scope,
+          key: normalized.key,
+          requestHash: normalized.requestHash,
+          response,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+      return response;
     });
   }
 
-  private nextStatus(current: AppointmentStatus, command: AppointmentCommand): AppointmentStatus {
-    const allowed: Record<AppointmentCommand, AppointmentStatus[]> = {
+  private nextStatus(current: AppointmentStatus, command: Exclude<AppointmentCommand, "complete">): AppointmentStatus {
+    const allowed: Record<Exclude<AppointmentCommand, "complete">, AppointmentStatus[]> = {
       confirm: [AppointmentStatus.PENDING],
       cancel: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
       dispute: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.COMPLETED]

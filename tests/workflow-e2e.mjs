@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:4000";
 const runId = Date.now();
 const covered = new Set();
+let commandSequence = 0;
+
+function withCommandIdempotency(path, method, headers) {
+  const isCommand = method === "POST" && (
+    /\/api\/v1\/applications\/[^/]+\/(accept|reject|cancel)$/.test(path) ||
+    /\/api\/v1\/appointments\/[^/]+\/(confirm|complete|cancel|dispute)$/.test(path)
+  );
+  if (!isCommand || headers["idempotency-key"] || headers["Idempotency-Key"]) return headers;
+  commandSequence += 1;
+  return { ...headers, "idempotency-key": `workflow-command-${runId}-${commandSequence}` };
+}
 
 async function raw(path, { token, method = "GET", body, headers = {} } = {}) {
   // Exercise the public gateway without overflowing its intentional 30 r/s
@@ -13,7 +24,7 @@ async function raw(path, { token, method = "GET", body, headers = {} } = {}) {
     headers: {
       ...(body !== undefined ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers
+      ...withCommandIdempotency(path, method, headers)
     },
     body: body !== undefined ? JSON.stringify(body) : undefined
   });
@@ -374,12 +385,27 @@ const perJobApplications = await request(
   { token: parent.accessToken }
 );
 assert.equal(perJobApplications.length, 2);
+const acceptCommandKey = `workflow-accept-command-${runId}`;
 const accepted = await request("POST /api/v1/applications/:id/accept", `/api/v1/applications/${capacityApplyA.id}/accept`, {
   method: "POST",
   token: parent.accessToken,
+  headers: { "idempotency-key": acceptCommandKey },
   body: { note: "录用老师甲" }
 });
 assert.equal(accepted.status, "ACCEPTED");
+const repeatedAccept = await request("POST /api/v1/applications/:id/accept", `/api/v1/applications/${capacityApplyA.id}/accept`, {
+  method: "POST",
+  token: parent.accessToken,
+  headers: { "idempotency-key": acceptCommandKey },
+  body: { note: "  录用老师甲  " }
+});
+assert.deepEqual(repeatedAccept, accepted, "同一幂等键和规范化命令必须返回首次响应");
+await expectStatus(409, `/api/v1/applications/${capacityApplyA.id}/accept`, {
+  method: "POST",
+  token: parent.accessToken,
+  headers: { "idempotency-key": acceptCommandKey },
+  body: { note: "更换录用备注" }
+});
 const acceptedDetail = await request("GET /api/v1/jobs/:id", `/api/v1/jobs/${capacityJob.id}`, {
   token: teacherA.accessToken
 });
@@ -526,8 +552,8 @@ const adminAppointments = await request("GET /admin-api/v1/appointments", "/admi
 const adminAppointment = adminAppointments.items.find(
   (item) => item.applicationId === adminAppointmentApplication.id
 );
-const adminConfirmed = await request(
-  "PATCH /admin-api/v1/appointments/:id/status",
+await expectStatus(
+  409,
   `/admin-api/v1/appointments/${adminAppointment.id}/status`,
   {
     method: "PATCH",
@@ -535,7 +561,17 @@ const adminConfirmed = await request(
     body: { status: "CONFIRMED", note: "管理员确认", version: adminAppointment.version }
   }
 );
-assert.equal(adminConfirmed.status, "CONFIRMED");
+const participantConfirmed = await request(
+  "POST /api/v1/appointments/:id/confirm",
+  `/api/v1/appointments/${adminAppointment.id}/confirm`,
+  { method: "POST", token: teacherA.accessToken, body: { reason: "教师本人确认预约" } }
+);
+assert.equal(participantConfirmed.status, "CONFIRMED");
+await expectStatus(409, `/admin-api/v1/appointments/${adminAppointment.id}/status`, {
+  method: "PATCH",
+  token: admin.accessToken,
+  body: { status: "COMPLETED", note: "管理员不能代替双方完成", version: participantConfirmed.version }
+});
 
 const disputeJob = await createAndApproveJob(admin.accessToken, parent.accessToken, "预约争议");
 const disputeApplication = await apply(teacherA.accessToken, disputeJob.id, "appointment-dispute");

@@ -63,6 +63,7 @@ docker compose -f compose.yaml -f compose.production.yaml up -d --scale api=2 --
 - PostgreSQL、Redis、MinIO 没有公网端口。
 - 数据库备份已执行恢复演练。
 - 使用 `tests/load/apply-concurrency.js` 完成压测。
+- `workflow-e2e` 与 `reviews-e2e` 已在目标数据库验证命令幂等、身份隔离及评价举报治理闭环。
 - 管理后台默认密码已经修改。
 
 ## 备份建议

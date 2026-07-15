@@ -139,6 +139,7 @@ async function createCompletedAppointment(adminToken, parent, teacher, index, be
   await request("POST /api/v1/applications/:id/accept", `/api/v1/applications/${application.id}/accept`, {
     method: "POST",
     token: parent.accessToken,
+    headers: { "idempotency-key": `review-accept-${index}-${runId}` },
     body: { note: "评价回归录用" }
   });
   const parentAppointments = await request("GET /api/v1/appointments", "/api/v1/appointments", {
@@ -153,6 +154,7 @@ async function createCompletedAppointment(adminToken, parent, teacher, index, be
   const confirmed = await request("POST /api/v1/appointments/:id/confirm", `/api/v1/appointments/${appointment.id}/confirm`, {
     method: "POST",
     token: teacher.accessToken,
+    headers: { "idempotency-key": `review-confirm-${index}-${runId}` },
     body: {}
   });
   assert.equal(confirmed.status, "CONFIRMED");
@@ -160,7 +162,12 @@ async function createCompletedAppointment(adminToken, parent, teacher, index, be
   const parentAcknowledgement = await request(
     "POST /api/v1/appointments/:id/complete",
     `/api/v1/appointments/${appointment.id}/complete`,
-    { method: "POST", token: parent.accessToken, body: {} }
+    {
+      method: "POST",
+      token: parent.accessToken,
+      headers: { "idempotency-key": `review-parent-complete-${index}-${runId}` },
+      body: {}
+    }
   );
   assert.equal(parentAcknowledgement.status, "CONFIRMED", "只有一方确认完成时不能进入已完成");
   assert.ok(parentAcknowledgement.parentCompletedAt);
@@ -169,7 +176,12 @@ async function createCompletedAppointment(adminToken, parent, teacher, index, be
   const completed = await request(
     "POST /api/v1/appointments/:id/complete",
     `/api/v1/appointments/${appointment.id}/complete`,
-    { method: "POST", token: teacher.accessToken, body: {} }
+    {
+      method: "POST",
+      token: teacher.accessToken,
+      headers: { "idempotency-key": `review-teacher-complete-${index}-${runId}` },
+      body: {}
+    }
   );
   assert.equal(completed.status, "COMPLETED");
   assert.ok(completed.parentCompletedAt);
@@ -419,7 +431,13 @@ for (const privateValue of [parents[0].account.id, parents[0].account.nickname, 
 assert.equal(Object.hasOwn(teacherReviews.items[0], "reviewerId"), false);
 
 const secondAppointment = await createCompletedAppointment(admin.accessToken, parents[1], teacher, 2);
-await createReview(parents[1].accessToken, secondAppointment.id, 2, 4, "教学认真，沟通及时，整体体验很好。" );
+const secondReview = await createReview(
+  parents[1].accessToken,
+  secondAppointment.id,
+  2,
+  4,
+  "教学认真，沟通及时，整体体验很好。"
+);
 teacherReviews = await request(
   "GET /api/v1/accounts/:accountId/reviews",
   `/api/v1/accounts/${teacher.account.id}/reviews?role=TEACHER`,
@@ -443,7 +461,12 @@ assert.equal(teacherReviews.summary.algorithmVersion, "review-v1");
 await request(
   "POST /api/v1/appointments/:id/dispute",
   `/api/v1/appointments/${thirdAppointment.id}/dispute`,
-  { method: "POST", token: teacher.accessToken, body: { reason: "验证争议评价自动排除" } }
+  {
+    method: "POST",
+    token: teacher.accessToken,
+    headers: { "idempotency-key": `review-dispute-${runId}` },
+    body: { reason: "验证争议评价自动排除" }
+  }
 );
 teacherReviews = await request(
   "GET /api/v1/accounts/:accountId/reviews",
@@ -462,6 +485,182 @@ assert.ok(
   notifications.some((item) => item.title === "收到新的合作评价"),
   "关闭普通业务提醒后，评价关键站内信仍应保留"
 );
+
+await expectStatus(404, `/api/v1/reviews/${firstReview.id}/reports`, {
+  method: "POST",
+  token: outsider.accessToken,
+  headers: { "idempotency-key": `review-report-outsider-${runId}` },
+  body: { category: "OTHER", description: "我不是被评价人，不应看到或举报这条评价。" }
+});
+
+const firstReportKey = `review-report-${runId}`;
+const firstReportPayload = {
+  category: "PRIVACY_LEAK",
+  description: "评价正文包含可能关联到线下身份的信息，请平台核实处理。"
+};
+const firstReport = await request(
+  "POST /api/v1/reviews/:id/reports",
+  `/api/v1/reviews/${firstReview.id}/reports`,
+  {
+    method: "POST",
+    token: teacher.accessToken,
+    headers: { "idempotency-key": firstReportKey },
+    body: firstReportPayload
+  }
+);
+assert.equal(firstReport.reviewId, firstReview.id);
+assert.equal(firstReport.status, "OPEN");
+assert.equal(Object.hasOwn(firstReport, "reporterId"), false);
+assert.equal(Object.hasOwn(firstReport, "resolvedById"), false);
+const replayedReport = await request(
+  "POST /api/v1/reviews/:id/reports",
+  `/api/v1/reviews/${firstReview.id}/reports`,
+  {
+    method: "POST",
+    token: teacher.accessToken,
+    headers: { "idempotency-key": firstReportKey },
+    body: firstReportPayload
+  }
+);
+assert.equal(replayedReport.id, firstReport.id, "同一举报请求重试必须返回同一结果");
+await expectStatus(409, `/api/v1/reviews/${firstReview.id}/reports`, {
+  method: "POST",
+  token: teacher.accessToken,
+  headers: { "idempotency-key": firstReportKey },
+  body: { ...firstReportPayload, category: "HARASSMENT" }
+});
+
+const myOpenReports = await request(
+  "GET /api/v1/me/review-reports",
+  "/api/v1/me/review-reports?limit=10",
+  { token: teacher.accessToken }
+);
+assert.equal(myOpenReports.items.some((item) => item.id === firstReport.id), true);
+assert.equal(myOpenReports.items.find((item) => item.id === firstReport.id).status, "OPEN");
+assert.equal(/reporterId|resolvedById|resolver/i.test(JSON.stringify(myOpenReports)), false);
+
+const teacherAsParent = await switchRole(teacher, "PARENT");
+const wrongRoleReports = await request(
+  "GET /api/v1/me/review-reports",
+  "/api/v1/me/review-reports?limit=10",
+  { token: teacherAsParent.accessToken }
+);
+assert.equal(wrongRoleReports.items.length, 0, "举报记录必须按当前身份隔离");
+await expectStatus(403, "/admin-api/v1/review-reports", { token: outsider.accessToken });
+
+const adminReviews = await request(
+  "GET /admin-api/v1/reviews",
+  "/admin-api/v1/reviews?page=1&pageSize=100",
+  { token: admin.accessToken }
+);
+const adminFirstReview = adminReviews.items.find((item) => item.id === firstReview.id);
+assert.ok(adminFirstReview, "管理员必须能在评价治理列表找到待处理评价");
+const hiddenReview = await request(
+  "POST /admin-api/v1/reviews/:id/hide",
+  `/admin-api/v1/reviews/${firstReview.id}/hide`,
+  {
+    method: "POST",
+    token: admin.accessToken,
+    body: { reason: "端到端验证：先临时隐藏该评价以核实内容。", version: adminFirstReview.version }
+  }
+);
+assert.equal(hiddenReview.status, "HIDDEN");
+teacherReviews = await request(
+  "GET /api/v1/accounts/:accountId/reviews",
+  `/api/v1/accounts/${teacher.account.id}/reviews?role=TEACHER`,
+  { token: outsider.accessToken }
+);
+assert.equal(teacherReviews.summary.count, 1, "隐藏评价必须立即退出公开聚合");
+
+const restoredReview = await request(
+  "POST /admin-api/v1/reviews/:id/restore",
+  `/admin-api/v1/reviews/${firstReview.id}/restore`,
+  {
+    method: "POST",
+    token: admin.accessToken,
+    body: { reason: "端到端验证：人工复核后先恢复，再测试举报结案。", version: hiddenReview.version }
+  }
+);
+assert.equal(restoredReview.status, "PUBLISHED");
+teacherReviews = await request(
+  "GET /api/v1/accounts/:accountId/reviews",
+  `/api/v1/accounts/${teacher.account.id}/reviews?role=TEACHER`,
+  { token: outsider.accessToken }
+);
+assert.equal(teacherReviews.summary.count, 2, "恢复评价必须重新进入公开聚合");
+
+let adminReports = await request(
+  "GET /admin-api/v1/review-reports",
+  "/admin-api/v1/review-reports?status=OPEN&page=1&pageSize=100",
+  { token: admin.accessToken }
+);
+const adminFirstReport = adminReports.items.find((item) => item.id === firstReport.id);
+assert.ok(adminFirstReport, "管理员必须能读取待处理举报及对应评价快照");
+const resolvedAction = await request(
+  "POST /admin-api/v1/review-reports/:id/resolve",
+  `/admin-api/v1/review-reports/${firstReport.id}/resolve`,
+  {
+    method: "POST",
+    token: admin.accessToken,
+    body: {
+      resolution: "ACTION_TAKEN",
+      note: "核实后决定隐藏评价，并保留审计证据供后续申诉。",
+      version: adminFirstReport.version,
+      reviewVersion: adminFirstReport.review.version
+    }
+  }
+);
+assert.equal(resolvedAction.status, "ACTION_TAKEN");
+assert.equal(resolvedAction.review.status, "HIDDEN");
+teacherReviews = await request(
+  "GET /api/v1/accounts/:accountId/reviews",
+  `/api/v1/accounts/${teacher.account.id}/reviews?role=TEACHER`,
+  { token: outsider.accessToken }
+);
+assert.equal(teacherReviews.summary.count, 1);
+
+const secondReport = await request(
+  "POST /api/v1/reviews/:id/reports",
+  `/api/v1/reviews/${secondReview.id}/reports`,
+  {
+    method: "POST",
+    token: teacher.accessToken,
+    headers: { "idempotency-key": `review-report-second-${runId}` },
+    body: { category: "FALSE_INFORMATION", description: "该描述可能与实际履约有偏差，请平台协助复核事实。" }
+  }
+);
+adminReports = await request(
+  "GET /admin-api/v1/review-reports",
+  "/admin-api/v1/review-reports?status=OPEN&page=1&pageSize=100",
+  { token: admin.accessToken }
+);
+const adminSecondReport = adminReports.items.find((item) => item.id === secondReport.id);
+assert.ok(adminSecondReport);
+const resolvedNoViolation = await request(
+  "POST /admin-api/v1/review-reports/:id/resolve",
+  `/admin-api/v1/review-reports/${secondReport.id}/resolve`,
+  {
+    method: "POST",
+    token: admin.accessToken,
+    body: {
+      resolution: "NO_VIOLATION",
+      note: "复核履约记录后未发现违规，评价继续保持公开状态。",
+      version: adminSecondReport.version,
+      reviewVersion: adminSecondReport.review.version
+    }
+  }
+);
+assert.equal(resolvedNoViolation.status, "NO_VIOLATION");
+assert.equal(resolvedNoViolation.review.status, "PUBLISHED");
+
+const resolvedReports = await request(
+  "GET /api/v1/me/review-reports",
+  "/api/v1/me/review-reports?limit=10",
+  { token: teacher.accessToken }
+);
+assert.equal(resolvedReports.items.find((item) => item.id === firstReport.id).status, "ACTION_TAKEN");
+assert.equal(resolvedReports.items.find((item) => item.id === secondReport.id).status, "NO_VIOLATION");
+assert.ok(resolvedReports.items.every((item) => item.resolutionNote && item.resolvedAt));
 
 const expected = [
   "GET /health",
@@ -485,10 +684,17 @@ const expected = [
   "GET /api/v1/me/reviews/received",
   "GET /api/v1/appointments/:id/counterpart-reputation",
   "POST /api/v1/appointments/:id/dispute",
-  "GET /api/v1/notifications"
+  "GET /api/v1/notifications",
+  "POST /api/v1/reviews/:id/reports",
+  "GET /api/v1/me/review-reports",
+  "GET /admin-api/v1/reviews",
+  "POST /admin-api/v1/reviews/:id/hide",
+  "POST /admin-api/v1/reviews/:id/restore",
+  "GET /admin-api/v1/review-reports",
+  "POST /admin-api/v1/review-reports/:id/resolve"
 ];
 for (const endpoint of expected) assert.ok(covered.has(endpoint), `未覆盖接口：${endpoint}`);
 
 console.log(
-  `Review E2E passed: mutual completion -> authorization -> idempotency -> anonymous reviews -> threshold -> dispute exclusion (${teacher.account.id}).`
+  `Review E2E passed: mutual completion -> authorization -> idempotency -> anonymous reviews -> threshold -> dispute exclusion -> report governance (${teacher.account.id}).`
 );

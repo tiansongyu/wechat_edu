@@ -198,9 +198,17 @@ Page({
           wx.showToast({ title: "请输入取消原因", icon: "none" });
           return;
         }
+        const commandSignature = `${application.id}:application-cancel:${reason}`;
+        if (!this._pendingCommand || this._pendingCommand.signature !== commandSignature) {
+          this._pendingCommand = {
+            signature: commandSignature,
+            key: api.createCommandKey("application-cancel", application.id)
+          };
+        }
         this.setData({ action: "cancel" });
         try {
-          await api.cancelApplication(application.id, reason);
+          await api.cancelApplication(application.id, reason, this._pendingCommand.key);
+          this._pendingCommand = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已取消", icon: "none" });
         } catch (error) {

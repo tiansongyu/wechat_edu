@@ -16,6 +16,7 @@ import { PreferencesModule } from "./modules/preferences/preferences.module";
 import { AppointmentsModule } from "./modules/appointments/appointments.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { PlatformModule } from "./modules/platform/platform.module";
+import { ReviewGovernanceModule } from "./modules/review-governance/review-governance.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { PlatformModule } from "./modules/platform/platform.module";
     PreferencesModule,
     AppointmentsModule,
     ReviewsModule,
+    ReviewGovernanceModule,
     PlatformModule
   ],
   controllers: [HealthController],

@@ -15,6 +15,7 @@ const menu = [
   ["/teacher-audits", "教师认证", "✓"],
   ["/job-audits", "发布审核", "▤"],
   ["/operations", "业务履约", "⇄"],
+  ["/review-governance", "评价治理", "☆"],
   ["/audit-logs", "操作审计", "⌁"]
 ];
 

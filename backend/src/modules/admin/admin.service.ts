@@ -332,13 +332,53 @@ export class AdminService {
           where: { id: applicationId },
           data: { status: dto.status, statusNote: dto.note?.trim(), handledAt: new Date(), version: { increment: 1 } }
         });
-        if (dto.status === ApplicationStatus.CANCELLED && application.appointment) {
-          await tx.appointment.updateMany({
-            where: {
-              id: application.appointment.id,
-              status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.DISPUTED] }
-            },
-            data: { status: AppointmentStatus.CANCELLED, statusNote: dto.note?.trim(), handledAt: new Date(), version: { increment: 1 } }
+        if (
+          dto.status === ApplicationStatus.CANCELLED &&
+          application.appointment &&
+          ([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.DISPUTED] as AppointmentStatus[])
+            .includes(application.appointment.status)
+        ) {
+          const appointmentBefore = application.appointment;
+          const cancelledAppointment = await tx.appointment.update({
+            where: { id: appointmentBefore.id },
+            data: {
+              status: AppointmentStatus.CANCELLED,
+              statusNote: dto.note?.trim(),
+              handledAt: new Date(),
+              version: { increment: 1 }
+            }
+          });
+          await tx.outboxEvent.create({
+            data: {
+              aggregateType: "Appointment",
+              aggregateId: cancelledAppointment.id,
+              eventType: "appointment.cancelled",
+              payload: {
+                appointmentId: cancelledAppointment.id,
+                jobId: application.jobId,
+                applicationId,
+                ownerId: application.job.ownerId,
+                teacherId: application.teacherId,
+                actorId,
+                reason: cancelledAppointment.statusNote,
+                source: "admin.application.cancel"
+              }
+            }
+          });
+          await tx.auditLog.create({
+            data: {
+              actorId,
+              action: "appointment.cancel.admin_linked_application",
+              targetType: "Appointment",
+              targetId: cancelledAppointment.id,
+              before: { status: appointmentBefore.status, version: appointmentBefore.version },
+              after: {
+                status: cancelledAppointment.status,
+                version: cancelledAppointment.version,
+                note: cancelledAppointment.statusNote,
+                sourceApplicationId: applicationId
+              }
+            }
           });
         }
       }
@@ -399,9 +439,8 @@ export class AdminService {
   }
 
   async updateAppointmentStatus(actorId: string, appointmentId: string, dto: AdminAppointmentStatusDto) {
-    if ((dto.status === AppointmentStatus.CANCELLED || dto.status === AppointmentStatus.DISPUTED) && !dto.note?.trim()) {
-      throw new BadRequestException("取消或争议操作必须填写原因");
-    }
+    const resolutionNote = dto.note?.trim();
+    if (!resolutionNote) throw new BadRequestException("管理员处理预约必须填写原因或处理结论");
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
@@ -412,28 +451,27 @@ export class AdminService {
       if (appointment.version !== dto.version) throw new ConflictException("预约记录已变化，请刷新后重试");
       if (appointment.status === dto.status) throw new ConflictException("预约已经是目标状态");
       const transitions: Record<AppointmentStatus, AppointmentStatus[]> = {
-        PENDING: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED, AppointmentStatus.DISPUTED],
-        CONFIRMED: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED, AppointmentStatus.DISPUTED],
+        PENDING: [AppointmentStatus.CANCELLED, AppointmentStatus.DISPUTED],
+        CONFIRMED: [AppointmentStatus.CANCELLED, AppointmentStatus.DISPUTED],
         COMPLETED: [AppointmentStatus.DISPUTED],
         CANCELLED: [],
         DISPUTED: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED]
       };
       if (!transitions[appointment.status].includes(dto.status)) throw new ConflictException("预约当前状态不允许该操作");
+      if (
+        appointment.status === AppointmentStatus.DISPUTED &&
+        dto.status === AppointmentStatus.COMPLETED &&
+        (!appointment.parentCompletedAt || !appointment.teacherCompletedAt || !appointment.completedAt)
+      ) {
+        throw new ConflictException("双方尚未完成确认，争议预约只能取消，不能由管理员代为完成");
+      }
       const handledAt = new Date();
-      const completionData = dto.status === AppointmentStatus.COMPLETED
-        ? {
-            parentCompletedAt: appointment.parentCompletedAt ?? handledAt,
-            teacherCompletedAt: appointment.teacherCompletedAt ?? handledAt,
-            completedAt: appointment.completedAt ?? handledAt
-          }
-        : {};
       const result = await tx.appointment.updateMany({
         where: { id: appointmentId, version: dto.version },
         data: {
           status: dto.status,
-          statusNote: dto.note?.trim() || null,
+          statusNote: resolutionNote,
           handledAt,
-          ...completionData,
           version: { increment: 1 }
         }
       });
@@ -442,7 +480,7 @@ export class AdminService {
       if (dto.status === AppointmentStatus.CANCELLED && appointment.application.status === ApplicationStatus.ACCEPTED) {
         await tx.application.update({
           where: { id: appointment.applicationId },
-          data: { status: ApplicationStatus.CANCELLED, statusNote: dto.note?.trim(), handledAt: new Date(), version: { increment: 1 } }
+          data: { status: ApplicationStatus.CANCELLED, statusNote: resolutionNote, handledAt: new Date(), version: { increment: 1 } }
         });
       }
       const suffix = {

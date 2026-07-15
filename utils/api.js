@@ -18,6 +18,11 @@ function uuidV4() {
   });
 }
 
+function createCommandKey(command, targetId) {
+  const safeCommand = String(command || "command").replace(/[^a-z0-9_-]/gi, "").slice(0, 24) || "command";
+  return `${safeCommand}-${getDeviceId()}-${String(targetId || "target").slice(0, 36)}-${uuidV4()}`.slice(0, 128);
+}
+
 function ensureLogin() {
   return requestClient.ensureAuthenticated();
 }
@@ -159,8 +164,13 @@ function listTeacherApplications() {
   return request("/api/v1/teacher/applications");
 }
 
-function cancelApplication(id, note = "") {
-  return request(`/api/v1/applications/${id}/cancel`, { method: "POST", data: { note } });
+function cancelApplication(id, note = "", idempotencyKey) {
+  const key = idempotencyKey || createCommandKey("application-cancel", id);
+  return request(`/api/v1/applications/${id}/cancel`, {
+    method: "POST",
+    data: { note },
+    header: { "Idempotency-Key": key }
+  });
 }
 
 function listParentApplications(jobId) {
@@ -171,12 +181,22 @@ function listAllParentApplications() {
   return request("/api/v1/parent/applications");
 }
 
-function acceptApplication(id, note = "") {
-  return request(`/api/v1/applications/${id}/accept`, { method: "POST", data: { note } });
+function acceptApplication(id, note = "", idempotencyKey) {
+  const key = idempotencyKey || createCommandKey("application-accept", id);
+  return request(`/api/v1/applications/${id}/accept`, {
+    method: "POST",
+    data: { note },
+    header: { "Idempotency-Key": key }
+  });
 }
 
-function rejectApplication(id, note = "") {
-  return request(`/api/v1/applications/${id}/reject`, { method: "POST", data: { note } });
+function rejectApplication(id, note = "", idempotencyKey) {
+  const key = idempotencyKey || createCommandKey("application-reject", id);
+  return request(`/api/v1/applications/${id}/reject`, {
+    method: "POST",
+    data: { note },
+    header: { "Idempotency-Key": key }
+  });
 }
 
 function favoriteJob(jobId, favorite) {
@@ -195,8 +215,13 @@ function listAppointments() {
   return request("/api/v1/appointments");
 }
 
-function updateAppointment(id, action, note = "") {
-  return request(`/api/v1/appointments/${id}/${action}`, { method: "POST", data: { reason: note } });
+function updateAppointment(id, action, note = "", idempotencyKey) {
+  const key = idempotencyKey || createCommandKey(`appointment-${action}`, id);
+  return request(`/api/v1/appointments/${id}/${action}`, {
+    method: "POST",
+    data: { reason: note },
+    header: { "Idempotency-Key": key }
+  });
 }
 
 function createReview(appointmentId, data, idempotencyKey) {
@@ -228,6 +253,25 @@ function listMyReceivedReviews(params = {}) {
 
 function getCounterpartReputation(appointmentId) {
   return request(`/api/v1/appointments/${appointmentId}/counterpart-reputation`);
+}
+
+function reportReview(reviewId, data, idempotencyKey) {
+  const key = idempotencyKey || `review-report-${getDeviceId()}-${reviewId}-${uuidV4()}`;
+  return request(`/api/v1/reviews/${reviewId}/reports`, {
+    method: "POST",
+    data: {
+      category: data.category,
+      description: String(data.description || "").trim()
+    },
+    header: { "Idempotency-Key": key }
+  });
+}
+
+function listMyReviewReports(params = {}) {
+  return request(`/api/v1/me/review-reports${queryString({
+    cursor: params.cursor,
+    limit: params.limit
+  })}`);
 }
 
 function listNotifications() {
@@ -362,6 +406,7 @@ module.exports = {
   applyJob,
   cancelApplication,
   closeJob,
+  createCommandKey,
   createJob,
   createReview,
   createUploadUrl,
@@ -385,6 +430,7 @@ module.exports = {
   listFavoriteJobs,
   listJobs,
   listNotifications,
+  listMyReviewReports,
   listMyReceivedReviews,
   listParentApplications,
   listTeacherApplications,
@@ -398,6 +444,7 @@ module.exports = {
   rejectApplication,
   reopenJob,
   request,
+  reportReview,
   sendConversationMessage,
   startConversation,
   switchRole,

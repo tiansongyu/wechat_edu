@@ -220,12 +220,21 @@ Page({
         wx.showToast({ title: "请填写拒绝原因", icon: "none" });
         return;
       }
+      const commandSignature = `${application.id}:${action}:${note}`;
+      if (!this._pendingCommand || this._pendingCommand.signature !== commandSignature) {
+        this._pendingCommand = {
+          signature: commandSignature,
+          key: api.createCommandKey(`application-${action}`, application.id)
+        };
+      }
+      const idempotencyKey = this._pendingCommand.key;
       this.setData({ actionId: application.id, actionType: action });
       if (accepting) {
-        await api.acceptApplication(application.id, note);
+        await api.acceptApplication(application.id, note, idempotencyKey);
       } else {
-        await api.rejectApplication(application.id, note);
+        await api.rejectApplication(application.id, note, idempotencyKey);
       }
+      this._pendingCommand = null;
 
       const refreshed = await this.loadApplications({ preserve: true, notify: false, force: true });
       if (!refreshed) {

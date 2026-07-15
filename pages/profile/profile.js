@@ -355,9 +355,17 @@ Page({
           wx.showToast({ title: "请输入取消原因", icon: "none" });
           return;
         }
+        const commandSignature = `${id}:application-cancel:${reason}`;
+        if (!this._pendingCommand || this._pendingCommand.signature !== commandSignature) {
+          this._pendingCommand = {
+            signature: commandSignature,
+            key: api.createCommandKey("application-cancel", id)
+          };
+        }
         this.setData({ actionId: id });
         try {
-          await api.cancelApplication(id, reason);
+          await api.cancelApplication(id, reason, this._pendingCommand.key);
+          this._pendingCommand = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已取消", icon: "none" });
         } catch (error) {
@@ -481,9 +489,17 @@ Page({
           wx.showToast({ title: `请输入${action === "cancel" ? "取消" : "争议"}原因`, icon: "none" });
           return;
         }
+        const commandSignature = `${id}:appointment-${action}:${reason}`;
+        if (!this._pendingCommand || this._pendingCommand.signature !== commandSignature) {
+          this._pendingCommand = {
+            signature: commandSignature,
+            key: api.createCommandKey(`appointment-${action}`, id)
+          };
+        }
         this.setData({ actionId: id });
         try {
-          await api.updateAppointment(id, action, reason);
+          await api.updateAppointment(id, action, reason, this._pendingCommand.key);
+          this._pendingCommand = null;
           await this.loadData(false);
           wx.showToast({ title: "预约状态已更新", icon: "success" });
         } catch (error) {

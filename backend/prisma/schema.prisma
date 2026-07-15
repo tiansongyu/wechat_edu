@@ -59,6 +59,20 @@ enum ReviewStatus {
   REMOVED
 }
 
+enum ReviewReportCategory {
+  PRIVACY_LEAK
+  HARASSMENT
+  FALSE_INFORMATION
+  ADVERTISING
+  OTHER
+}
+
+enum ReviewReportStatus {
+  OPEN
+  ACTION_TAKEN
+  NO_VIOLATION
+}
+
 enum NotificationType {
   APPLICATION
   AUDIT
@@ -74,35 +88,38 @@ enum OutboxStatus {
 }
 
 model Account {
-  id              String               @id @default(uuid()) @db.Uuid
-  openid          String?              @unique @db.VarChar(128)
-  unionid         String?              @unique @db.VarChar(128)
-  username        String?              @unique @db.VarChar(64)
-  passwordHash    String?              @db.VarChar(255)
-  nickname        String               @default("微信用户") @db.VarChar(80)
-  avatarUrl       String?              @db.VarChar(500)
-  phoneEncrypted  String?              @db.Text
-  phoneHash       String?              @db.VarChar(128)
-  status          AccountStatus        @default(ACTIVE)
-  lastLoginAt     DateTime?            @db.Timestamptz(3)
-  loginCount      Int                  @default(0)
-  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime             @updatedAt @db.Timestamptz(3)
-  roles           AccountRole[]
-  parentProfile   ParentProfile?
-  teacherProfile  TeacherProfile?
-  jobs            JobPost[]
-  applications    Application[]        @relation("TeacherApplications")
-  favorites       Favorite[]
-  sessions        RefreshSession[]
-  notifications   Notification[]
-  memberships     ConversationMember[]
-  sentMessages    Message[]
-  auditLogs       AuditLog[]           @relation("AuditActor")
-  idempotencyKeys IdempotencyRecord[]
-  preference      UserPreference?
-  writtenReviews  Review[]             @relation("ReviewWriter")
-  receivedReviews Review[]             @relation("ReviewRecipient")
+  id                     String               @id @default(uuid()) @db.Uuid
+  openid                 String?              @unique @db.VarChar(128)
+  unionid                String?              @unique @db.VarChar(128)
+  username               String?              @unique @db.VarChar(64)
+  passwordHash           String?              @db.VarChar(255)
+  nickname               String               @default("微信用户") @db.VarChar(80)
+  avatarUrl              String?              @db.VarChar(500)
+  phoneEncrypted         String?              @db.Text
+  phoneHash              String?              @db.VarChar(128)
+  status                 AccountStatus        @default(ACTIVE)
+  lastLoginAt            DateTime?            @db.Timestamptz(3)
+  loginCount             Int                  @default(0)
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @db.Timestamptz(3)
+  roles                  AccountRole[]
+  parentProfile          ParentProfile?
+  teacherProfile         TeacherProfile?
+  jobs                   JobPost[]
+  applications           Application[]        @relation("TeacherApplications")
+  favorites              Favorite[]
+  sessions               RefreshSession[]
+  notifications          Notification[]
+  memberships            ConversationMember[]
+  sentMessages           Message[]
+  auditLogs              AuditLog[]           @relation("AuditActor")
+  idempotencyKeys        IdempotencyRecord[]
+  preference             UserPreference?
+  writtenReviews         Review[]             @relation("ReviewWriter")
+  receivedReviews        Review[]             @relation("ReviewRecipient")
+  reviewStatusChanges    Review[]             @relation("ReviewStatusChanger")
+  submittedReviewReports ReviewReport[]       @relation("ReviewReportReporter")
+  resolvedReviewReports  ReviewReport[]       @relation("ReviewReportResolver")
 
   @@map("accounts")
 }
@@ -269,25 +286,56 @@ model Appointment {
 }
 
 model Review {
-  id            String       @id @default(uuid()) @db.Uuid
-  appointmentId String       @db.Uuid
-  reviewerId    String       @db.Uuid
-  revieweeId    String       @db.Uuid
-  reviewerRole  RoleCode
-  revieweeRole  RoleCode
-  rating        Int
-  tags          String[]     @default([])
-  content       String?      @db.Text
-  status        ReviewStatus @default(PUBLISHED)
-  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
-  appointment   Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  reviewer      Account      @relation("ReviewWriter", fields: [reviewerId], references: [id], onDelete: Restrict)
-  reviewee      Account      @relation("ReviewRecipient", fields: [revieweeId], references: [id], onDelete: Restrict)
+  id                  String         @id @default(uuid()) @db.Uuid
+  appointmentId       String         @db.Uuid
+  reviewerId          String         @db.Uuid
+  revieweeId          String         @db.Uuid
+  reviewerRole        RoleCode
+  revieweeRole        RoleCode
+  rating              Int
+  tags                String[]       @default([])
+  content             String?        @db.Text
+  status              ReviewStatus   @default(PUBLISHED)
+  version             Int            @default(1)
+  statusChangedReason String?        @db.VarChar(500)
+  statusChangedAt     DateTime?      @db.Timestamptz(3)
+  statusChangedById   String?        @db.Uuid
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+  appointment         Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  reviewer            Account        @relation("ReviewWriter", fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewee            Account        @relation("ReviewRecipient", fields: [revieweeId], references: [id], onDelete: Restrict)
+  statusChanger       Account?       @relation("ReviewStatusChanger", fields: [statusChangedById], references: [id], onDelete: SetNull)
+  reports             ReviewReport[]
 
   @@unique([appointmentId, reviewerId])
   @@index([revieweeId, revieweeRole, status, createdAt(sort: Desc)])
   @@map("reviews")
+}
+
+model ReviewReport {
+  id             String               @id @default(uuid()) @db.Uuid
+  reviewId       String               @db.Uuid
+  reporterId     String               @db.Uuid
+  reporterRole   RoleCode
+  category       ReviewReportCategory
+  description    String               @db.VarChar(500)
+  status         ReviewReportStatus   @default(OPEN)
+  resolutionNote String?              @db.VarChar(500)
+  resolvedAt     DateTime?            @db.Timestamptz(3)
+  resolvedById   String?              @db.Uuid
+  version        Int                  @default(1)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+  review         Review               @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  reporter       Account              @relation("ReviewReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  resolver       Account?             @relation("ReviewReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([reviewId, reporterId])
+  @@index([reporterId, reporterRole, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([reviewId, status])
+  @@map("review_reports")
 }
 
 model Favorite {

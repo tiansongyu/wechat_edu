@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:4000";
 const covered = new Set();
+let commandSequence = 0;
 const expectedEndpoints = [
   "POST /api/v1/auth/wechat-login",
   "POST /api/v1/auth/refresh",
@@ -38,13 +39,23 @@ const expectedEndpoints = [
   "POST /api/v1/files/upload-url"
 ];
 
+function withCommandIdempotency(path, method, headers = {}) {
+  const isCommand = method === "POST" && (
+    /\/api\/v1\/applications\/[^/]+\/(accept|reject|cancel)$/.test(path) ||
+    /\/api\/v1\/appointments\/[^/]+\/(confirm|complete|cancel|dispute)$/.test(path)
+  );
+  if (!isCommand || headers["idempotency-key"] || headers["Idempotency-Key"]) return headers;
+  commandSequence += 1;
+  return { ...headers, "idempotency-key": `mini-command-${runId}-${commandSequence}` };
+}
+
 async function request(path, { token, method = "GET", body, headers = {} } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       ...(body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers
+      ...withCommandIdempotency(path, method, headers)
     },
     body: body ? JSON.stringify(body) : undefined
   });
@@ -59,11 +70,13 @@ async function mini(endpoint, path, options) {
 }
 
 async function expectStatus(status, path, options = {}) {
+  const method = options.method || "GET";
   const response = await fetch(`${baseUrl}${path}`, {
-    method: options.method || "GET",
+    method,
     headers: {
       ...(options.body ? { "content-type": "application/json" } : {}),
-      ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+      ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+      ...withCommandIdempotency(path, method, options.headers || {})
     },
     body: options.body ? JSON.stringify(options.body) : undefined
   });

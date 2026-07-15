@@ -257,6 +257,19 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(createReviewRequest.header["Idempotency-Key"], "fixed-review-key");
     assert.deepEqual(createReviewRequest.data, { rating: 5, tags: ["专业耐心"], content: "合作非常顺利" });
 
+    await apiClient.acceptApplication("application-1", "  欢迎加入  ", "fixed-accept-command-key");
+    const acceptCommandRequest = capturedRequests[capturedRequests.length - 1];
+    assert.match(acceptCommandRequest.url, /\/api\/v1\/applications\/application-1\/accept$/);
+    assert.equal(acceptCommandRequest.header["Idempotency-Key"], "fixed-accept-command-key");
+    assert.deepEqual(acceptCommandRequest.data, { note: "  欢迎加入  " });
+
+    await apiClient.updateAppointment("appointment-1", "cancel", "时间冲突", "fixed-appointment-command-key");
+    const appointmentCommandRequest = capturedRequests[capturedRequests.length - 1];
+    assert.match(appointmentCommandRequest.url, /\/api\/v1\/appointments\/appointment-1\/cancel$/);
+    assert.equal(appointmentCommandRequest.header["Idempotency-Key"], "fixed-appointment-command-key");
+    assert.deepEqual(appointmentCommandRequest.data, { reason: "时间冲突" });
+    assert.ok(apiClient.createCommandKey("appointment-cancel", "appointment-1").length <= 128);
+
     await apiClient.listTeacherReviews("teacher-1", { cursor: "cursor-1", limit: 10 });
     assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/teachers\/teacher-1\/reviews\?cursor=cursor-1&limit=10$/);
     await apiClient.listMyReceivedReviews({ cursor: "cursor-2", limit: 5 });

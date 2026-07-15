@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -23,9 +23,10 @@ export class AppointmentsController {
   confirm(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
     @Body() dto: AppointmentCommandDto
   ) {
-    return this.appointments.confirm(user.id, id, dto.reason);
+    return this.appointments.confirm(user.id, id, dto.reason, user.activeRole, idempotencyKey);
   }
 
   @Roles(RoleCode.PARENT, RoleCode.TEACHER)
@@ -33,9 +34,10 @@ export class AppointmentsController {
   complete(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
     @Body() dto: AppointmentCommandDto
   ) {
-    return this.appointments.complete(user.id, id, dto.reason, user.activeRole);
+    return this.appointments.complete(user.id, id, dto.reason, user.activeRole, idempotencyKey);
   }
 
   @Roles(RoleCode.PARENT, RoleCode.TEACHER)
@@ -43,9 +45,10 @@ export class AppointmentsController {
   cancel(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
     @Body() dto: AppointmentCommandDto
   ) {
-    return this.appointments.cancel(user.id, id, dto.reason);
+    return this.appointments.cancel(user.id, id, dto.reason, user.activeRole, idempotencyKey);
   }
 
   @Roles(RoleCode.PARENT, RoleCode.TEACHER)
@@ -53,8 +56,9 @@ export class AppointmentsController {
   dispute(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
     @Body() dto: AppointmentCommandDto
   ) {
-    return this.appointments.dispute(user.id, id, dto.reason);
+    return this.appointments.dispute(user.id, id, dto.reason, user.activeRole, idempotencyKey);
   }
 }

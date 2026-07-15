@@ -1,7 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { createHash } from "crypto";
 import { ApplicationStatus, AuditStatus, JobStatus, JobType } from "../../generated/prisma/enums";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ApplyJobDto } from "./dto/applications.dto";
+
+type ApplicationCommand = "accept" | "reject" | "cancel";
 
 @Injectable()
 export class ApplicationsService {
@@ -27,6 +30,28 @@ export class ApplicationsService {
       }
     }
     throw new ConflictException("请求冲突，请稍后重试");
+  }
+
+  private normalizeCommand(command: ApplicationCommand, idempotencyKey: string, note?: string) {
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 128) {
+      throw new BadRequestException("缺少有效的 Idempotency-Key 请求头");
+    }
+    const normalizedNote = note?.trim() || null;
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify({ command, note: normalizedNote }))
+      .digest("hex");
+    return { key, normalizedNote, requestHash };
+  }
+
+  private assertMatchingCommand(storedHash: string | null, requestHash: string) {
+    if (!storedHash || storedHash !== requestHash) {
+      throw new ConflictException("Idempotency-Key 已用于不同的报名操作");
+    }
+  }
+
+  private presentCommandResponse<T>(record: T): T {
+    return JSON.parse(JSON.stringify(record)) as T;
   }
 
   async apply(teacherId: string, jobId: string, idempotencyKey: string, dto: ApplyJobDto) {
@@ -187,7 +212,9 @@ export class ApplicationsService {
     });
   }
 
-  async accept(ownerId: string, applicationId: string, note?: string) {
+  async accept(ownerId: string, applicationId: string, note: string | undefined, idempotencyKey: string) {
+    const normalized = this.normalizeCommand("accept", idempotencyKey, note);
+    const scope = `application-command:${applicationId}`;
     return this.retrySerializable(() => this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRawUnsafe<Array<{ jobId: string }>>(
         `SELECT "jobId" FROM applications WHERE id = $1::uuid FOR UPDATE`,
@@ -201,6 +228,16 @@ export class ApplicationsService {
       });
       if (!application) throw new NotFoundException("报名记录不存在");
       if (application.job.ownerId !== ownerId) throw new ForbiddenException("只能处理自己需求的报名");
+
+      const existingKey = await tx.idempotencyRecord.findUnique({
+        where: { actorId_scope_key: { actorId: ownerId, scope, key: normalized.key } }
+      });
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        this.assertMatchingCommand(existingKey.requestHash, normalized.requestHash);
+        return existingKey.response;
+      }
+      if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
+
       if (application.status !== ApplicationStatus.PENDING) throw new ConflictException("该报名已经处理");
       if (application.job.status !== JobStatus.PUBLISHED) throw new ConflictException("该需求当前不可录用");
       const accepted = await tx.application.count({
@@ -212,7 +249,7 @@ export class ApplicationsService {
         where: { id: applicationId },
         data: {
           status: ApplicationStatus.ACCEPTED,
-          statusNote: note || "发布者已接受报名",
+          statusNote: normalized.normalizedNote || "发布者已接受报名",
           handledAt: new Date(),
           version: { increment: 1 }
         }
@@ -267,13 +304,26 @@ export class ApplicationsService {
           after: { status: updated.status, version: updated.version, note: updated.statusNote }
         }
       });
-      return updated;
+      const response = this.presentCommandResponse(updated);
+      await tx.idempotencyRecord.create({
+        data: {
+          actorId: ownerId,
+          scope,
+          key: normalized.key,
+          requestHash: normalized.requestHash,
+          response,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+      return response;
     }, { isolationLevel: "Serializable" }));
   }
 
-  async reject(ownerId: string, applicationId: string, note?: string) {
-    const reason = note?.trim();
+  async reject(ownerId: string, applicationId: string, note: string | undefined, idempotencyKey: string) {
+    const normalized = this.normalizeCommand("reject", idempotencyKey, note);
+    const reason = normalized.normalizedNote;
     if (!reason) throw new BadRequestException("拒绝报名必须填写原因");
+    const scope = `application-command:${applicationId}`;
     return this.retrySerializable(() => this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRawUnsafe<Array<{ jobId: string }>>(
         `SELECT "jobId" FROM applications WHERE id = $1::uuid FOR UPDATE`,
@@ -287,6 +337,16 @@ export class ApplicationsService {
       });
       if (!application) throw new NotFoundException("报名记录不存在");
       if (application.job.ownerId !== ownerId) throw new ForbiddenException("只能处理自己需求的报名");
+
+      const existingKey = await tx.idempotencyRecord.findUnique({
+        where: { actorId_scope_key: { actorId: ownerId, scope, key: normalized.key } }
+      });
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        this.assertMatchingCommand(existingKey.requestHash, normalized.requestHash);
+        return existingKey.response;
+      }
+      if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
+
       if (application.status !== ApplicationStatus.PENDING) throw new ConflictException("该报名已经处理");
       const updated = await tx.application.update({
         where: { id: applicationId },
@@ -315,14 +375,27 @@ export class ApplicationsService {
           after: { status: updated.status, version: updated.version, note: updated.statusNote }
         }
       });
-      return updated;
+      const response = this.presentCommandResponse(updated);
+      await tx.idempotencyRecord.create({
+        data: {
+          actorId: ownerId,
+          scope,
+          key: normalized.key,
+          requestHash: normalized.requestHash,
+          response,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+      return response;
     }, { isolationLevel: "Serializable" }));
   }
 
 
-  async cancel(teacherId: string, applicationId: string, note?: string) {
-    const reason = note?.trim();
+  async cancel(teacherId: string, applicationId: string, note: string | undefined, idempotencyKey: string) {
+    const normalized = this.normalizeCommand("cancel", idempotencyKey, note);
+    const reason = normalized.normalizedNote;
     if (!reason) throw new BadRequestException("取消报名必须填写原因");
+    const scope = `application-command:${applicationId}`;
     return this.retrySerializable(() => this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRawUnsafe<Array<{ jobId: string }>>(
         `SELECT "jobId" FROM applications WHERE id = $1::uuid FOR UPDATE`,
@@ -335,6 +408,16 @@ export class ApplicationsService {
       });
       if (!application) throw new NotFoundException("报名记录不存在");
       if (application.teacherId !== teacherId) throw new ForbiddenException("只能取消自己的报名");
+
+      const existingKey = await tx.idempotencyRecord.findUnique({
+        where: { actorId_scope_key: { actorId: teacherId, scope, key: normalized.key } }
+      });
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        this.assertMatchingCommand(existingKey.requestHash, normalized.requestHash);
+        return existingKey.response;
+      }
+      if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
+
       if (application.status !== ApplicationStatus.PENDING) throw new ConflictException("只有待处理报名可以取消");
       const updated = await tx.application.update({
         where: { id: applicationId },
@@ -370,7 +453,18 @@ export class ApplicationsService {
           after: { status: updated.status, version: updated.version, note: updated.statusNote }
         }
       });
-      return updated;
+      const response = this.presentCommandResponse(updated);
+      await tx.idempotencyRecord.create({
+        data: {
+          actorId: teacherId,
+          scope,
+          key: normalized.key,
+          requestHash: normalized.requestHash,
+          response,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      });
+      return response;
     }, { isolationLevel: "Serializable" }));
   }
 

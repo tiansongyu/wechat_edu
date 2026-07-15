@@ -44,8 +44,8 @@
       </view>
 
       <view class="review-success" wx:if="{{submittedReview}}">
-        <view class="review-success__icon">✓</view>
-        <view class="review-success__main"><text class="review-success__title">谢谢你的认真反馈</text><text class="review-success__copy">评价已经保存，双方的每次真诚合作都在让平台变得更可靠。</text></view>
+        <view class="review-success__icon">{{submittedReview.status === 'PUBLISHED' ? '✓' : '!'}}</view>
+        <view class="review-success__main"><text class="review-success__title">{{submittedReview.governanceLabel}}</text><text class="review-success__copy">{{submittedReview.governanceCopy}}</text></view>
         <text class="review-success__rating">{{submittedReview.rating}} 星</text>
       </view>
 
@@ -55,15 +55,41 @@
 
       <view class="review-list-card">
         <view class="section-heading"><view><text class="section-heading__title">{{receivedMode ? '我收到的评价' : targetRole === 'TEACHER' ? '老师的合作口碑' : '合作评价概览'}}</text><text class="section-heading__copy">评价只来自平台内已完成的真实预约</text></view><text class="review-count">{{summary.count}} 条</text></view>
+        <view class="report-history" wx:if="{{receivedMode && reviewReports.length}}"><view class="report-history__head"><text>我的举报进度</text><text>{{reviewReports.length}} 项</text></view><view class="report-history__item" wx:for="{{reviewReports}}" wx:for-item="report" wx:key="id"><view><text class="report-history__status">{{report.statusLabel}}</text><text class="report-history__meta">{{report.categoryLabel}} · {{report.createdLabel}}</text></view><button data-review-id="{{report.reviewId}}" bindtap="openReport">查看</button></view></view>
+        <view class="report-history report-history--error" wx:elif="{{receivedMode && reportHistoryUnavailable}}"><text>举报处理进度暂时没有同步，不影响查看或提交新的问题。</text></view>
         <view class="review-context-summary" wx:if="{{appointment && targetRole === 'PARENT'}}"><text>🔐</text><text>为保护家长隐私，预约参与者可查看真实星级汇总，逐条评价内容不公开。</text></view>
         <view class="review-item" wx:for="{{reviews}}" wx:key="id">
           <view class="review-item__head"><view><text class="review-item__author">{{item.reviewerLabel}}</text><view class="review-item__stars"><text wx:for="{{item.stars}}" wx:for-item="star" wx:key="value" class="{{star.filled ? 'is-filled' : ''}}">★</text></view></view><text class="review-item__date">{{item.createdLabel}}</text></view>
           <view class="review-item__tags" wx:if="{{item.tags.length}}"><text wx:for="{{item.tags}}" wx:key="*this">{{item}}</text></view>
           <text class="review-item__content">{{item.content}}</text>
+          <view class="review-item__governance" wx:if="{{receivedMode}}">
+            <view wx:if="{{item.report}}" class="report-status report-status--{{item.report.statusTone}}"><text>{{item.report.statusLabel}}</text><text>{{item.report.categoryLabel}}</text></view>
+            <text wx:elif="{{reportHistoryUnavailable}}" class="review-item__report-hint">举报记录暂未同步，仍可提交问题</text>
+            <text wx:else class="review-item__report-hint">发现隐私、骚扰、虚假或广告内容？</text>
+            <button data-review-id="{{item.id}}" bindtap="openReport">{{item.report ? '查看处理进度' : '举报评价'}}</button>
+          </view>
         </view>
         <view class="review-empty" wx:if="{{!reviews.length && !(appointment && targetRole === 'PARENT')}}"><view class="review-empty__planet">✦</view><text class="review-empty__title">第一颗评价星星还在路上</text><text class="review-empty__copy">完成合作并由双方确认后，就能留下真实评价。</text></view>
         <button class="load-more" wx:if="{{nextCursor}}" loading="{{loadingMore}}" disabled="{{loadingMore}}" bindtap="loadMore">{{loadingMore ? '加载中...' : '查看更多评价'}}</button>
       </view>
     </view>
   </block>
+  <view class="report-sheet-mask" wx:if="{{showReportSheet}}" catchtap="closeReportSheet">
+    <view class="report-sheet" catchtap="preventReportClose">
+      <view class="report-sheet__handle"></view>
+      <view class="report-sheet__head"><view><text class="report-sheet__title">{{existingReport ? '举报处理进度' : '举报这条评价'}}</text><text class="report-sheet__copy">{{existingReport ? '处理结果只对你可见，不会公开举报信息' : '请按事实说明问题，低分本身不等于违规'}}</text></view><text class="report-sheet__close" bindtap="closeReportSheet">×</text></view>
+      <view class="report-progress" wx:if="{{existingReport}}">
+        <view class="report-progress__icon">✓</view><view class="report-progress__main"><text class="report-progress__status">{{existingReport.statusLabel}}</text><text class="report-progress__meta">{{existingReport.categoryLabel}} · {{existingReport.createdLabel}}提交</text><text class="report-progress__note" wx:if="{{existingReport.resolutionNote}}">处理说明：{{existingReport.resolutionNote}}</text><text class="report-progress__note" wx:else>平台会保留原始评价证据并进行人工核查。</text></view>
+      </view>
+      <block wx:else>
+        <text class="report-sheet__label">选择问题类型</text>
+        <view class="report-category-grid"><view wx:for="{{reportCategoryOptions}}" wx:key="value" class="report-category {{reportCategory === item.value ? 'report-category--active' : ''}}" data-category="{{item.value}}" bindtap="selectReportCategory"><text class="report-category__icon">{{item.icon}}</text><text>{{item.label}}</text></view></view>
+        <view class="report-sheet__label-row"><text class="report-sheet__label">具体说明</text><text>{{reportDescriptionLength}} / 500</text></view>
+        <textarea class="report-textarea" maxlength="500" value="{{reportDescription}}" disabled="{{submittingReport}}" placeholder="请说明评价中哪部分存在问题，以及可能造成的影响（至少10字）" placeholder-class="report-textarea__placeholder" bindinput="handleReportDescription" />
+        <view class="report-sheet__safety"><text>🛡</text><text>举报不会直接删除评价；平台只会在核实隐私、骚扰、虚假或广告问题后采取措施。</text></view>
+        <text class="report-sheet__error" wx:if="{{reportError}}">{{reportError}}</text>
+        <button class="report-submit" loading="{{submittingReport}}" disabled="{{submittingReport}}" bindtap="submitReport">{{submittingReport ? '正在安全提交...' : '提交平台核查'}}</button>
+      </block>
+    </view>
+  </view>
 </view>

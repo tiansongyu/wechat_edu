@@ -44,19 +44,34 @@ export class ApplicationsController {
 
   @Roles(RoleCode.PARENT)
   @Post("applications/:id/accept")
-  accept(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: HandleApplicationDto) {
-    return this.applications.accept(user.id, id, dto.note);
+  accept(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
+    @Body() dto: HandleApplicationDto
+  ) {
+    return this.applications.accept(user.id, id, dto.note, idempotencyKey);
   }
 
   @Roles(RoleCode.PARENT)
   @Post("applications/:id/reject")
-  reject(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: HandleApplicationDto) {
-    return this.applications.reject(user.id, id, dto.note);
+  reject(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
+    @Body() dto: HandleApplicationDto
+  ) {
+    return this.applications.reject(user.id, id, dto.note, idempotencyKey);
   }
 
   @Roles(RoleCode.TEACHER)
   @Post("applications/:id/cancel")
-  cancel(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: HandleApplicationDto) {
-    return this.applications.cancel(user.id, id, dto.note);
+  cancel(
+    @CurrentUser() user: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey: string,
+    @Body() dto: HandleApplicationDto
+  ) {
+    return this.applications.cancel(user.id, id, dto.note, idempotencyKey);
   }
 }

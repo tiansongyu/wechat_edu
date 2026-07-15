@@ -12,6 +12,18 @@ const RATING_HINTS = {
   4: "合作愉快，值得推荐",
   5: "非常满意，是一次很棒的合作"
 };
+const REPORT_CATEGORIES = [
+  { value: "PRIVACY_LEAK", label: "泄露隐私", icon: "⌁" },
+  { value: "HARASSMENT", label: "辱骂骚扰", icon: "!" },
+  { value: "FALSE_INFORMATION", label: "虚假内容", icon: "?" },
+  { value: "ADVERTISING", label: "广告导流", icon: "↗" },
+  { value: "OTHER", label: "其他问题", icon: "…" }
+];
+const REPORT_STATUS = {
+  OPEN: { label: "平台处理中", tone: "pending" },
+  ACTION_TAKEN: { label: "已采取措施", tone: "resolved" },
+  NO_VIOLATION: { label: "未发现违规", tone: "neutral" }
+};
 
 function emptySummary() {
   return {
@@ -25,13 +37,36 @@ function emptySummary() {
 
 function formatReview(item) {
   const rating = Number(item.rating || 0);
+  const governance = {
+    HIDDEN: { label: "平台复核中", copy: "这条评价暂不公开，也不会计入星级汇总。" },
+    REMOVED: { label: "已停止展示", copy: "这条评价已由平台停止公开，原始记录仍会保留。" },
+    PUBLISHED: { label: "评价已保存", copy: "评价已经保存，双方的每次真诚合作都在让平台变得更可靠。" }
+  }[item.status] || { label: "评价已保存", copy: "评价记录已经安全保存。" };
   return {
     ...item,
     tags: Array.isArray(item.tags) ? item.tags : [],
     stars: STARS.map((value) => ({ value, filled: value <= rating })),
     createdLabel: api.formatDate(item.createdAt),
-    content: item.content || "这位用户选择了星级和标签，没有补充文字。"
+    content: item.content || "这位用户选择了星级和标签，没有补充文字。",
+    governanceLabel: governance.label,
+    governanceCopy: governance.copy
   };
+}
+
+function formatReport(item) {
+  const meta = REPORT_STATUS[item.status] || { label: "状态更新中", tone: "pending" };
+  return {
+    ...item,
+    statusLabel: meta.label,
+    statusTone: meta.tone,
+    categoryLabel: (REPORT_CATEGORIES.find((entry) => entry.value === item.category) || {}).label || "其他问题",
+    createdLabel: api.formatDate(item.createdAt),
+    resolvedLabel: item.resolvedAt ? api.formatDate(item.resolvedAt) : ""
+  };
+}
+
+function attachReports(reviews, reportsByReview) {
+  return reviews.map((item) => ({ ...item, report: reportsByReview[item.id] || null }));
 }
 
 Page({
@@ -64,7 +99,20 @@ Page({
     submittedReview: null,
     reputationError: "",
     reputationRetryable: false,
-    requiredRole: ""
+    requiredRole: "",
+    reportsByReview: {},
+    reviewReports: [],
+    reportHistoryUnavailable: false,
+    showReportSheet: false,
+    reportReviewId: "",
+    existingReport: null,
+    reportCategoryOptions: REPORT_CATEGORIES,
+    reportCategory: "",
+    reportDescription: "",
+    reportDescriptionLength: 0,
+    reportError: "",
+    reportSubmissionKey: "",
+    submittingReport: false
   },
 
   onLoad(options) {
@@ -87,11 +135,22 @@ Page({
       if (this.data.appointmentId) {
         await this.loadAppointment(account);
       } else if (this.data.receivedMode) {
-        const result = await api.listMyReceivedReviews({ limit: 20 });
+        const [result, reportResult] = await Promise.all([
+          api.listMyReceivedReviews({ limit: 20 }),
+          api.listMyReviewReports({ limit: 100 }).catch(() => ({ unavailable: true, items: [] }))
+        ]);
+        const reviewReports = (reportResult.items || []).map(formatReport);
+        const reportsByReview = reviewReports.reduce((resultMap, report) => {
+          resultMap[report.reviewId] = report;
+          return resultMap;
+        }, {});
         this.applyReviewResult(result, {
           account,
           pageTitle: account.activeRole === "TEACHER" ? "我的教师评价" : "我的家长评价",
-          targetRole: result.targetRole || account.activeRole
+          targetRole: result.targetRole || account.activeRole,
+          reportsByReview,
+          reviewReports,
+          reportHistoryUnavailable: Boolean(reportResult.unavailable)
         });
       } else if (this.data.accountId) {
         const result = await api.listTeacherReviews(this.data.accountId, { limit: 20 });
@@ -179,10 +238,11 @@ Page({
   },
 
   applyReviewResult(result, extra = {}) {
+    const reportsByReview = extra.reportsByReview || this.data.reportsByReview || {};
     this.setData({
       ...extra,
       summary: result.summary || emptySummary(),
-      reviews: (result.items || []).map(formatReview),
+      reviews: attachReports((result.items || []).map(formatReview), reportsByReview),
       nextCursor: result.nextCursor || "",
       loading: false,
       error: ""
@@ -335,6 +395,96 @@ Page({
     }
   },
 
+  openReport(event) {
+    if (!this.data.receivedMode || this.data.submittingReport) return;
+    const reviewId = String(event.currentTarget.dataset.reviewId || "");
+    if (!reviewId) return;
+    const existingReport = this.data.reportsByReview[reviewId] || null;
+    this.setData({
+      showReportSheet: true,
+      reportReviewId: reviewId,
+      existingReport,
+      reportCategory: "",
+      reportDescription: "",
+      reportDescriptionLength: 0,
+      reportError: "",
+      reportSubmissionKey: ""
+    });
+  },
+
+  closeReportSheet() {
+    if (this.data.submittingReport) return;
+    this.setData({ showReportSheet: false, reportError: "" });
+  },
+
+  preventReportClose() {},
+
+  selectReportCategory(event) {
+    if (this.data.submittingReport || this.data.existingReport) return;
+    const category = String(event.currentTarget.dataset.category || "");
+    if (!REPORT_CATEGORIES.some((item) => item.value === category)) return;
+    this.setData({ reportCategory: category, reportError: "", reportSubmissionKey: "" });
+  },
+
+  handleReportDescription(event) {
+    if (this.data.submittingReport || this.data.existingReport) return;
+    const reportDescription = event.detail.value || "";
+    this.setData({
+      reportDescription,
+      reportDescriptionLength: Array.from(reportDescription).length,
+      reportError: "",
+      reportSubmissionKey: ""
+    });
+  },
+
+  validateReport() {
+    if (!REPORT_CATEGORIES.some((item) => item.value === this.data.reportCategory)) return "请选择问题类型";
+    const description = String(this.data.reportDescription || "").trim();
+    const length = Array.from(description).length;
+    if (length < 10) return "请至少填写10个字，帮助平台准确核查";
+    if (length > 500) return "问题说明不能超过500字";
+    return "";
+  },
+
+  async submitReport() {
+    if (this.data.submittingReport || this.data.existingReport || !this.data.reportReviewId) return;
+    const reportError = this.validateReport();
+    if (reportError) {
+      this.setData({ reportError });
+      wx.showToast({ title: reportError, icon: "none" });
+      return;
+    }
+    const reportSubmissionKey = this.data.reportSubmissionKey
+      || `review-report-${this.data.reportReviewId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this.setData({ submittingReport: true, reportError: "", reportSubmissionKey });
+    try {
+      const result = await api.reportReview(this.data.reportReviewId, {
+        category: this.data.reportCategory,
+        description: this.data.reportDescription
+      }, reportSubmissionKey);
+      const report = formatReport(result);
+      const reportsByReview = { ...this.data.reportsByReview, [report.reviewId]: report };
+      const reviewReports = [
+        report,
+        ...this.data.reviewReports.filter((item) => item.reviewId !== report.reviewId)
+      ];
+      this.setData({
+        reportsByReview,
+        reviewReports,
+        reviews: attachReports(this.data.reviews, reportsByReview),
+        existingReport: report,
+        submittingReport: false,
+        reportSubmissionKey: ""
+      });
+      wx.showToast({ title: "举报已提交", icon: "success" });
+    } catch (error) {
+      this.setData({
+        submittingReport: false,
+        reportError: error.message || "提交失败，请检查后重试"
+      });
+    }
+  },
+
   async loadMore() {
     if (this.data.loadingMore || !this.data.nextCursor) return;
     const canLoadTeacherReviews = Boolean(
@@ -348,7 +498,7 @@ Page({
         ? await api.listMyReceivedReviews(params)
         : await api.listTeacherReviews(this.data.accountId || this.data.target.accountId, params);
       this.setData({
-        reviews: [...this.data.reviews, ...(result.items || []).map(formatReview)],
+        reviews: [...this.data.reviews, ...attachReports((result.items || []).map(formatReview), this.data.reportsByReview)],
         nextCursor: result.nextCursor || ""
       });
     } catch (error) {
