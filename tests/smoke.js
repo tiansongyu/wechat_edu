@@ -61,6 +61,7 @@ const teacherTemplate = fs.readFileSync(path.join(root, "pages/teacher-profile/t
 assert.match(publishTemplate, /picker[^>]+mode="region"/);
 assert.doesNotMatch(publishTemplate, /data-field="address"/);
 assert.match(profileTemplate, /picker[^>]+mode="region"/);
+assert.match(profileTemplate, /input[^>]+type="nickname"/);
 assert.doesNotMatch(profileTemplate, /data-field="(?:city|district|address)"/);
 assert.match(teacherTemplate, /picker[^>]+mode="region"/);
 assert.doesNotMatch(teacherTemplate, /data-field="serviceDistricts"/);
@@ -70,6 +71,7 @@ const pages = pageFiles.map((file) => loadDefinition(file, "Page"));
 assert.ok(pages.every((page) => page.data && typeof page === "object"));
 assert.equal(typeof pages[0].loadData, "function");
 assert.equal(typeof pages[1].loadNearby, "function");
+assert.equal(typeof pages[4].saveNickname, "function");
 assert.equal(typeof pages[7].confirmAndHandle, "function");
 assert.equal(typeof pages[8].sendMessage, "function");
 
@@ -129,12 +131,35 @@ for (const file of [...pageFiles, "app.js", "utils/api.js", "utils/request.js"])
 }
 
 requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-000000000000/read", { method: "POST" })
-  .then(() => {
+  .then(async () => {
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0].method, "POST");
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
     assert.equal(capturedRequests[0].header["ngrok-skip-browser-warning"], "true", "real-device requests must bypass the ngrok browser warning page");
-    console.log("Smoke checks passed: database-only client flows, teacher application eligibility, valid empty JSON writes, ngrok real-device bypass, 9 pages, stable session identity, and native tab bar.");
+
+    const originalUpdateAccount = apiClient.updateAccount;
+    let nicknamePayload;
+    apiClient.updateAccount = async (payload) => {
+      nicknamePayload = payload;
+      return { id: "test-account", nickname: payload.nickname, activeRole: "PARENT" };
+    };
+    const profilePage = {
+      ...pages[4],
+      data: {
+        ...pages[4].data,
+        account: { id: "test-account", nickname: "旧昵称", activeRole: "PARENT" },
+        nicknameDraft: "  新昵称  "
+      },
+      setData(update) { this.data = { ...this.data, ...update }; }
+    };
+    await profilePage.saveNickname.call(profilePage);
+    assert.deepEqual(nicknamePayload, { nickname: "新昵称" });
+    assert.equal(profilePage.data.account.nickname, "新昵称");
+    assert.equal(profilePage.data.accountInitial, "新");
+    assert.equal(profilePage.data.showNicknameEditor, false);
+    apiClient.updateAccount = originalUpdateAccount;
+
+    console.log("Smoke checks passed: database-only client flows, nickname editing, teacher application eligibility, valid empty JSON writes, ngrok real-device bypass, 9 pages, stable session identity, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);

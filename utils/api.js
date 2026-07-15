@@ -38,6 +38,10 @@ function getAccount() {
   return request("/api/v1/auth/me");
 }
 
+function updateAccount(data) {
+  return request("/api/v1/auth/me", { method: "PATCH", data });
+}
+
 function listJobs(params = {}) {
   return request(`/api/v1/jobs${queryString(params)}`);
 }
@@ -358,6 +362,7 @@ module.exports = {
   startConversation,
   switchRole,
   updateAppointment,
+  updateAccount,
   updateJob,
   updateParentProfile,
   updatePreferences,

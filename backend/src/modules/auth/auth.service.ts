@@ -5,7 +5,7 @@ import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccountStatus, RoleCode } from "../../generated/prisma/enums";
-import { AdminLoginDto, WechatLoginDto } from "./dto/auth.dto";
+import { AdminLoginDto, UpdateAccountDto, WechatLoginDto } from "./dto/auth.dto";
 
 @Injectable()
 export class AuthService {
@@ -169,6 +169,38 @@ export class AuthService {
       include: { roles: true, parentProfile: true, teacherProfile: true }
     });
     return this.presentAccount(account, activeRole);
+  }
+
+  async updateAccount(accountId: string, activeRole: RoleCode, dto: UpdateAccountDto) {
+    const nickname = dto.nickname.trim().replace(/\s+/g, " ");
+    if (!nickname) throw new BadRequestException("昵称不能为空");
+    if (nickname.length > 30) throw new BadRequestException("昵称长度不能超过30个字符");
+
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.account.findUniqueOrThrow({
+        where: { id: accountId },
+        include: { roles: true, parentProfile: true, teacherProfile: true }
+      });
+      this.assertActive(current.status);
+      if (current.nickname === nickname) return this.presentAccount(current, activeRole);
+
+      const updated = await tx.account.update({
+        where: { id: accountId },
+        data: { nickname },
+        include: { roles: true, parentProfile: true, teacherProfile: true }
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: accountId,
+          action: "account.nickname.update",
+          targetType: "Account",
+          targetId: accountId,
+          before: { nickname: current.nickname },
+          after: { nickname }
+        }
+      });
+      return this.presentAccount(updated, activeRole);
+    });
   }
 
   private async createSession(

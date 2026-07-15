@@ -7,6 +7,7 @@ const expectedEndpoints = [
   "POST /api/v1/auth/refresh",
   "POST /api/v1/auth/logout",
   "GET /api/v1/auth/me",
+  "PATCH /api/v1/auth/me",
   "POST /api/v1/auth/switch-role",
   "GET /api/v1/profiles/teacher",
   "PATCH /api/v1/profiles/teacher",
@@ -128,6 +129,20 @@ assert.equal(parent.account.activeRole, "PARENT");
 
 const parentMe = await mini("GET /api/v1/auth/me", "/api/v1/auth/me", { token: parent.accessToken });
 assert.equal(parentMe.id, parent.account.id);
+
+const renamedParent = await mini("PATCH /api/v1/auth/me", "/api/v1/auth/me", {
+  method: "PATCH",
+  token: parent.accessToken,
+  body: { nickname: `全接口家长 ${runId}` }
+});
+assert.equal(renamedParent.nickname, `全接口家长 ${runId}`);
+const persistedNickname = await request("/api/v1/auth/me", { token: parent.accessToken });
+assert.equal(persistedNickname.nickname, renamedParent.nickname);
+await expectStatus(400, "/api/v1/auth/me", {
+  method: "PATCH",
+  token: parent.accessToken,
+  body: { nickname: "   " }
+});
 
 const oldRefreshToken = parent.refreshToken;
 const refreshed = await mini("POST /api/v1/auth/refresh", "/api/v1/auth/refresh", {

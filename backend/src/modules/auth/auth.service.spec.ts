@@ -1,5 +1,6 @@
 import { ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AccountStatus, RoleCode } from "../../generated/prisma/enums";
 import { AuthService } from "./auth.service";
 
 describe("AuthService WeChat identity exchange", () => {
@@ -48,5 +49,35 @@ describe("AuthService WeChat identity exchange", () => {
   it("refuses live mode when the server-side AppSecret is absent", async () => {
     const auth = service({ WECHAT_LOGIN_MOCK: "false", WECHAT_APP_ID: "wx-test-app" });
     await expect((auth as any).exchangeWechatCode("one-time-code")).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("persists a normalized nickname and records the account audit", async () => {
+    const current = {
+      id: "account-1",
+      nickname: "旧昵称",
+      avatarUrl: null,
+      status: AccountStatus.ACTIVE,
+      lastLoginAt: null,
+      loginCount: 1,
+      roles: [{ roleCode: RoleCode.PARENT }],
+      parentProfile: null,
+      teacherProfile: null
+    };
+    const tx = {
+      account: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(current),
+        update: jest.fn().mockResolvedValue({ ...current, nickname: "新 昵称" })
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) }
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const auth = new AuthService(prisma as any, {} as any, { get: jest.fn() } as any);
+
+    await expect(auth.updateAccount("account-1", RoleCode.PARENT, { nickname: "  新   昵称  " }))
+      .resolves.toMatchObject({ nickname: "新 昵称", activeRole: RoleCode.PARENT });
+    expect(tx.account.update).toHaveBeenCalledWith(expect.objectContaining({ data: { nickname: "新 昵称" } }));
+    expect(tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: "account.nickname.update", before: { nickname: "旧昵称" }, after: { nickname: "新 昵称" } })
+    }));
   });
 });

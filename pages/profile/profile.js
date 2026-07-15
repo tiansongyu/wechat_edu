@@ -11,6 +11,9 @@ Page({
     actionId: "",
     account: null,
     accountInitial: "人",
+    showNicknameEditor: false,
+    nicknameDraft: "",
+    savingNickname: false,
     activeRole: "PARENT",
     roleName: "家长版",
     profileMeta: "资料未完善",
@@ -84,6 +87,7 @@ Page({
       this.setData({
         account,
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
+        nicknameDraft: account.nickname || "",
         activeRole,
         roleName: activeRole === "TEACHER" ? "老师版" : "家长版",
         profileMeta,
@@ -149,6 +153,60 @@ Page({
   },
 
   retry() { this.loadData(); },
+
+  editNickname() {
+    if (!this.data.account || this.data.savingNickname) return;
+    this.setData({
+      showNicknameEditor: true,
+      nicknameDraft: this.data.account.nickname || ""
+    });
+  },
+
+  closeNicknameEditor() {
+    if (this.data.savingNickname) return;
+    this.setData({ showNicknameEditor: false });
+  },
+
+  preventNicknameClose() {},
+
+  handleNicknameInput(event) {
+    this.setData({ nicknameDraft: event.detail.value });
+  },
+
+  async saveNickname() {
+    if (this.data.savingNickname) return;
+    const nickname = String(this.data.nicknameDraft || "").trim().replace(/\s+/g, " ");
+    if (!nickname) {
+      wx.showToast({ title: "请输入昵称", icon: "none" });
+      return;
+    }
+    if (nickname.length > 30) {
+      wx.showToast({ title: "昵称最多30个字符", icon: "none" });
+      return;
+    }
+    if (nickname === this.data.account.nickname) {
+      this.setData({ showNicknameEditor: false, nicknameDraft: nickname });
+      wx.showToast({ title: "昵称未发生变化", icon: "none" });
+      return;
+    }
+
+    this.setData({ savingNickname: true });
+    try {
+      const account = await api.updateAccount({ nickname });
+      this.setData({
+        account,
+        accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
+        nicknameDraft: account.nickname || "",
+        showNicknameEditor: false
+      });
+      getApp().globalData.account = account;
+      wx.showToast({ title: "昵称已保存", icon: "success" });
+    } catch (error) {
+      wx.showToast({ title: error.message || "昵称保存失败", icon: "none" });
+    } finally {
+      this.setData({ savingNickname: false });
+    }
+  },
 
   async switchRole() {
     if (this.data.actionId) return;

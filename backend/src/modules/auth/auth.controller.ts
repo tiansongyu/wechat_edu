@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Headers, Ip, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Ip, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
 import { RequestUser } from "../../common/interfaces/request-user";
-import { AdminLoginDto, RefreshDto, SwitchRoleDto, WechatLoginDto } from "./dto/auth.dto";
+import { AdminLoginDto, RefreshDto, SwitchRoleDto, UpdateAccountDto, WechatLoginDto } from "./dto/auth.dto";
 import { AuthService } from "./auth.service";
 
 @ApiTags("小程序认证")
@@ -42,6 +42,12 @@ export class AuthController {
   @Get("me")
   me(@CurrentUser() user: RequestUser) {
     return this.auth.getAccount(user.id, user.activeRole);
+  }
+
+  @ApiBearerAuth()
+  @Patch("me")
+  updateMe(@CurrentUser() user: RequestUser, @Body() dto: UpdateAccountDto) {
+    return this.auth.updateAccount(user.id, user.activeRole, dto);
   }
 
   @ApiBearerAuth()
