@@ -247,7 +247,7 @@ assert.ok(listed.items.some((item) => item.id === acceptedJob.id));
 
 const nearby = await mini(
   "GET /api/v1/jobs/nearby",
-  "/api/v1/jobs/nearby?latitude=22.54042&longitude=113.93457&radiusKm=5&type=TEACHING_NEED",
+  `/api/v1/jobs/nearby?latitude=22.54042&longitude=113.93457&radiusKm=5&type=TEACHING_NEED&keyword=${runId}&limit=10`,
   { token: teacher.accessToken }
 );
 assert.ok(nearby.items.some((item) => item.id === acceptedJob.id));
@@ -371,7 +371,13 @@ const messages = await mini(
   `/api/v1/conversations/${conversation.id}/messages`,
   { token: teacher.accessToken }
 );
-assert.ok(messages.items.some((item) => item.id === firstMessage.id));
+const receivedMessage = messages.items.find((item) => item.id === firstMessage.id);
+assert.equal(receivedMessage?.content, "您好，想沟通一下课程安排。");
+const conversationsBeforeRead = await mini("GET /api/v1/conversations", "/api/v1/conversations", {
+  token: teacher.accessToken
+});
+const unreadBefore = conversationsBeforeRead.find((item) => item.id === conversation.id)?.unreadCount;
+assert.ok(unreadBefore >= 1);
 const readConversation = await mini(
   "POST /api/v1/conversations/:id/read",
   `/api/v1/conversations/${conversation.id}/read`,
@@ -381,7 +387,40 @@ assert.equal(readConversation.success, true);
 const conversations = await mini("GET /api/v1/conversations", "/api/v1/conversations", {
   token: teacher.accessToken
 });
-assert.equal(conversations.find((item) => item.id === conversation.id)?.unreadCount, 0);
+const unreadAfter = conversations.find((item) => item.id === conversation.id)?.unreadCount;
+assert.equal(unreadAfter, 0);
+
+const replyMessage = await mini(
+  "POST /api/v1/conversations/:id/messages",
+  `/api/v1/conversations/${conversation.id}/messages`,
+  {
+    method: "POST",
+    token: teacher.accessToken,
+    body: { clientMessageId: crypto.randomUUID(), content: "收到，我们周六见。" }
+  }
+);
+const parentMessages = await mini(
+  "GET /api/v1/conversations/:id/messages",
+  `/api/v1/conversations/${conversation.id}/messages`,
+  { token: parent.accessToken }
+);
+assert.equal(parentMessages.items.find((item) => item.id === replyMessage.id)?.content, "收到，我们周六见。");
+const parentConversationsBeforeRead = await mini("GET /api/v1/conversations", "/api/v1/conversations", {
+  token: parent.accessToken
+});
+const parentUnreadBefore = parentConversationsBeforeRead.find((item) => item.id === conversation.id)?.unreadCount;
+assert.ok(parentUnreadBefore >= 1);
+const parentReadConversation = await mini(
+  "POST /api/v1/conversations/:id/read",
+  `/api/v1/conversations/${conversation.id}/read`,
+  { method: "POST", token: parent.accessToken, body: {} }
+);
+assert.equal(parentReadConversation.success, true);
+const parentConversationsAfterRead = await mini("GET /api/v1/conversations", "/api/v1/conversations", {
+  token: parent.accessToken
+});
+const parentUnreadAfter = parentConversationsAfterRead.find((item) => item.id === conversation.id)?.unreadCount;
+assert.equal(parentUnreadAfter, 0);
 
 let notifications = [];
 for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -416,4 +455,18 @@ await expectStatus(401, "/api/v1/auth/refresh", {
 });
 
 assert.deepEqual([...covered].sort(), [...expectedEndpoints].sort());
+console.log(`Chat evidence: ${JSON.stringify({
+  conversationId: conversation.id,
+  messageId: firstMessage.id,
+  idempotentMessageId: duplicateMessage.id,
+  receivedContent: receivedMessage.content,
+  teacherUnreadBefore: unreadBefore,
+  teacherReadSuccess: readConversation.success,
+  teacherUnreadAfter: unreadAfter,
+  replyMessageId: replyMessage.id,
+  replyContent: "收到，我们周六见。",
+  parentUnreadBefore,
+  parentReadSuccess: parentReadConversation.success,
+  parentUnreadAfter
+})}`);
 console.log(`Mini API verification passed: ${covered.size}/${expectedEndpoints.length} endpoints covered.`);
