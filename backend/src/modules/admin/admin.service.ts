@@ -270,6 +270,13 @@ export class AdminService {
             : [];
       if (!allowed.includes(dto.status)) throw new ConflictException("报名当前状态不允许该操作");
 
+      if (
+        dto.status === ApplicationStatus.CANCELLED &&
+        application.appointment?.status === AppointmentStatus.COMPLETED
+      ) {
+        throw new ConflictException("预约已完成，不能撤销录用");
+      }
+
       if (dto.status === ApplicationStatus.ACCEPTED) {
         if (application.job.status !== JobStatus.PUBLISHED) throw new ConflictException("该发布当前不可录用");
         const acceptedCount = await tx.application.count({
@@ -309,7 +316,10 @@ export class AdminService {
         });
         if (dto.status === ApplicationStatus.CANCELLED && application.appointment) {
           await tx.appointment.updateMany({
-            where: { id: application.appointment.id, status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] } },
+            where: {
+              id: application.appointment.id,
+              status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.DISPUTED] }
+            },
             data: { status: AppointmentStatus.CANCELLED, statusNote: dto.note?.trim(), handledAt: new Date(), version: { increment: 1 } }
           });
         }

@@ -535,6 +535,36 @@ const disputed = await request("POST /api/v1/appointments/:id/dispute", `/api/v1
   body: { reason: "实际授课情况存在分歧" }
 });
 assert.equal(disputed.status, "DISPUTED");
+const acceptedApplications = await request(
+  "GET /admin-api/v1/applications",
+  "/admin-api/v1/applications?status=ACCEPTED&pageSize=100",
+  { token: admin.accessToken }
+);
+const disputedApplication = acceptedApplications.items.find((item) => item.id === disputeApplication.id);
+assert.ok(disputedApplication);
+const cancelledDisputedApplication = await request(
+  "PATCH /admin-api/v1/applications/:id/status",
+  `/admin-api/v1/applications/${disputedApplication.id}/status`,
+  {
+    method: "PATCH",
+    token: admin.accessToken,
+    body: {
+      status: "CANCELLED",
+      note: "争议协商后终止合作",
+      version: disputedApplication.version
+    }
+  }
+);
+assert.equal(cancelledDisputedApplication.status, "CANCELLED");
+const cancelledDisputedAppointments = await request(
+  "GET /admin-api/v1/appointments",
+  "/admin-api/v1/appointments?status=CANCELLED&pageSize=100",
+  { token: admin.accessToken }
+);
+assert.equal(
+  cancelledDisputedAppointments.items.find((item) => item.id === disputedTarget.id)?.status,
+  "CANCELLED"
+);
 
 const parentApplications = await request(
   "GET /api/v1/parent/applications",

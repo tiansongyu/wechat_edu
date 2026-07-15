@@ -41,7 +41,7 @@ function actionLabel(item: any, nextStatus: string) {
 function availableActions(item: any) {
   if (activeTab.value === "applications") {
     if (item.status === "PENDING") return ["ACCEPTED", "REJECTED", "CANCELLED"];
-    if (item.status === "ACCEPTED") return ["CANCELLED"];
+    if (item.status === "ACCEPTED") return item.appointment?.status === "COMPLETED" ? [] : ["CANCELLED"];
     return [];
   }
   if (item.status === "PENDING") return ["CONFIRMED", "CANCELLED", "DISPUTED"];
