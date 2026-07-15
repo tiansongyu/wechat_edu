@@ -75,7 +75,7 @@ DOCKER_BUILD_PROXY=http://host.docker.internal:7897 docker compose up -d --build
 
 1. 使用微信开发者工具导入仓库根目录。
 2. 当前 AppID 已配置为 `wx02054be10e52aff0`。
-3. 当前体验环境 API 地址为 `http://89.117.20.124:4000`。
+3. 当前临时体验环境 API 地址为 `https://tablet-litter-rocker.ngrok-free.dev`，由 ngrok 转发至服务器 Docker 网关。
 4. 微信体验版真机请求通常仍要求已备案的 HTTPS 合法域名；正式体验前应将 [`utils/config.js`](utils/config.js) 替换为该 HTTPS API 域名。
 5. 在微信公众平台配置相同的 `request` 合法域名。
 6. 正式环境设置 `WECHAT_APP_SECRET`，并将 `WECHAT_LOGIN_MOCK=false`。
