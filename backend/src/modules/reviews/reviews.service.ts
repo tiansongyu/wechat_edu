@@ -86,11 +86,14 @@ export class ReviewsService {
       if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
 
       const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: { job: true, application: true }
+        where: { id: appointmentId }
       });
       if (!appointment) throw new NotFoundException("预约不存在");
-      const identities = this.resolveReviewParties(user, appointment);
+      const job = await tx.jobPost.findUnique({ where: { id: appointment.jobId } });
+      const application = await tx.application.findUnique({ where: { id: appointment.applicationId } });
+      if (!job || !application) throw new NotFoundException("预约关联信息不存在");
+      const appointmentContext = { ...appointment, job, application };
+      const identities = this.resolveReviewParties(user, appointmentContext);
       if (
         appointment.status !== AppointmentStatus.COMPLETED ||
         !appointment.parentCompletedAt ||
@@ -99,7 +102,7 @@ export class ReviewsService {
       ) {
         throw new ConflictException("只有双方确认完成且无争议的预约可以评价");
       }
-      if (appointment.application.status !== ApplicationStatus.ACCEPTED) {
+      if (application.status !== ApplicationStatus.ACCEPTED) {
         throw new ConflictException("预约对应的合作关系当前不可评价");
       }
 

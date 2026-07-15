@@ -10,11 +10,13 @@
     "start:worker": "node dist/worker.js",
     "lint": "tsc --noEmit",
     "test": "jest --runInBand",
+    "test:persistence": "node ../tests/docker-persistence.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset-sample": "tsx prisma/reset-sample-data.ts && tsx prisma/seed.ts"
+    "db:verify-sample": "tsx prisma/verify-sample-data.ts",
+    "db:reset-sample": "tsx prisma/reset-sample-data.ts && SEED_DEMO_DATA=true npm run db:seed && npm run db:verify-sample"
   },
   "dependencies": {
     "@fastify/helmet": "^13.0.2",

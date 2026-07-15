@@ -1,4 +1,5 @@
 const api = require("../../utils/api");
+const locationPermission = require("../../utils/location-permission");
 const DEFAULT_REGION = ["广东省", "深圳市", "南山区"];
 
 const EMPTY_FORM = {
@@ -157,8 +158,7 @@ Page({
         });
       },
       fail: (error) => {
-        if (error && /cancel/i.test(error.errMsg || "")) return;
-        wx.showToast({ title: "未能获取地点，请检查定位权限", icon: "none" });
+        locationPermission.handleChooseLocationFailure(error, () => this.chooseLocation());
       }
     });
   },

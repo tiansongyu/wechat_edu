@@ -151,15 +151,17 @@ function refreshAccessToken() {
 
 async function request(path, options = {}, retry = { refresh: true, login: true }) {
   const method = String(options.method || "GET").toUpperCase();
+  const useAuth = options.auth !== false;
   // Fastify rejects an empty payload when the request declares JSON. WeChat's
   // wx.request sends that exact combination for body-less POST/PATCH/DELETE
   // calls, so always provide a valid empty JSON object for write requests.
   const requestData = options.data === undefined && !["GET", "HEAD"].includes(method)
     ? {}
     : options.data;
-  let token = wx.getStorageSync(TOKEN_KEY);
+  let token = useAuth ? wx.getStorageSync(TOKEN_KEY) : "";
   const accessExpiresAt = Number(wx.getStorageSync(ACCESS_EXPIRES_KEY) || 0);
-  const canPreemptivelyRefresh = token
+  const canPreemptivelyRefresh = useAuth
+    && token
     && retry.refresh
     && wx.getStorageSync(REFRESH_KEY)
     && !path.includes("/auth/")
@@ -187,7 +189,7 @@ async function request(path, options = {}, retry = { refresh: true, login: true 
       }
     });
   } catch (error) {
-    if (error.statusCode !== 401) throw error;
+    if (error.statusCode !== 401 || !useAuth) throw error;
 
     if (retry.refresh && wx.getStorageSync(REFRESH_KEY)) {
       try {

@@ -1,7 +1,21 @@
 {
   "description": "家教直聘微信小程序",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": ".git" },
+      { "type": "folder", "value": "admin-web" },
+      { "type": "folder", "value": "backend" },
+      { "type": "folder", "value": "docs" },
+      { "type": "folder", "value": "infra" },
+      { "type": "folder", "value": "tests" },
+      { "type": "file", "value": ".dockerignore" },
+      { "type": "file", "value": ".env" },
+      { "type": "file", "value": ".env.example" },
+      { "type": "file", "value": ".gitignore" },
+      { "type": "file", "value": "compose.production.yaml" },
+      { "type": "file", "value": "compose.yaml" },
+      { "type": "file", "value": "README.md" }
+    ],
     "include": []
   },
   "setting": {

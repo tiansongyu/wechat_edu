@@ -681,10 +681,37 @@ const duplicateMessage = await request(
   {
     method: "POST",
     token: parent.accessToken,
-    body: { clientMessageId, content: "该重复消息不应新增" }
+    body: { clientMessageId, content: "  工作流回归消息  " }
   }
 );
 assert.equal(duplicateMessage.id, message.id);
+await expectStatus(409, `/api/v1/conversations/${conversation.id}/messages`, {
+  method: "POST",
+  token: parent.accessToken,
+  body: { clientMessageId, content: "同一幂等键不能代表另一条消息" }
+});
+const parentAsTeacherForChat = await request("POST /api/v1/auth/switch-role", "/api/v1/auth/switch-role", {
+  method: "POST",
+  token: parent.accessToken,
+  body: { role: "TEACHER" }
+});
+const wrongRoleConversations = await request("GET /api/v1/conversations", "/api/v1/conversations", {
+  token: parentAsTeacherForChat.accessToken
+});
+assert.equal(wrongRoleConversations.some((item) => item.id === conversation.id), false);
+await expectStatus(403, `/api/v1/conversations/${conversation.id}/messages`, {
+  token: parentAsTeacherForChat.accessToken
+});
+await expectStatus(403, `/api/v1/conversations/${conversation.id}/messages`, {
+  method: "POST",
+  token: parentAsTeacherForChat.accessToken,
+  body: { clientMessageId: crypto.randomUUID(), content: "错误身份不能发送" }
+});
+await expectStatus(403, `/api/v1/conversations/${conversation.id}/read`, {
+  method: "POST",
+  token: parentAsTeacherForChat.accessToken,
+  body: {}
+});
 const mutedConversations = await request("GET /api/v1/conversations", "/api/v1/conversations", {
   token: teacherA.accessToken
 });

@@ -559,3 +559,45 @@
 .parent-editor { margin-top: 20rpx; padding: 26rpx; background: #fff; border: 1rpx solid #e8ebf1; border-radius: 26rpx; }.parent-editor__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; color: #27334a; font-size: 27rpx; font-weight: 700; }.parent-editor__head text:last-child { color: #7e8898; font-size: 21rpx; font-weight: 500; }.parent-editor input { height: 82rpx; margin-top: 14rpx; padding: 0 20rpx; color: #2b354a; font-size: 23rpx; background: #f7f8fa; border: 1rpx solid #e8ebf0; border-radius: 18rpx; }.parent-editor button { margin-top: 22rpx; color: #fff; font-size: 23rpx; background: #3478f6; border-radius: 18rpx; }
 .parent-location-control { display: flex; align-items: center; justify-content: space-between; margin-top: 14rpx; padding: 18rpx 20rpx; background: #f7f8fa; border: 1rpx solid #e8ebf0; border-radius: 18rpx; }.parent-location-control view { display: flex; min-width: 0; flex-direction: column; gap: 8rpx; }.parent-location-control view text:first-child { color: #616d80; font-size: 20rpx; font-weight: 700; }.parent-location-control view text:last-child { overflow: hidden; color: #7f8999; font-size: 20rpx; text-overflow: ellipsis; white-space: nowrap; }.parent-location-control > text { margin-left: 16rpx; color: #3478f6; }
 @media (max-width: 340px) { .profile-content { padding-right: 18rpx; padding-left: 18rpx; }.profile-user__meta { max-width: 260rpx; }.profile-item__status { font-size: 18rpx; } }
+
+.profile-warning {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 18rpx;
+  padding: 20rpx 22rpx;
+  color: #76561f;
+  font-size: 21rpx;
+  line-height: 1.5;
+  background: #fff8e7;
+  border: 1rpx solid #f4dfaa;
+  border-radius: 20rpx;
+}
+
+.profile-warning__icon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30rpx;
+  height: 30rpx;
+  margin: 1rpx 12rpx 0 0;
+  color: #ffffff;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 30rpx;
+  background: #d59a2b;
+  border-radius: 50%;
+}
+
+.profile-warning__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-warning__retry {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  color: #a26700;
+  font-weight: 700;
+  white-space: nowrap;
+}

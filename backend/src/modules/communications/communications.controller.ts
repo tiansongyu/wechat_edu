@@ -28,7 +28,7 @@ export class CommunicationsController {
 
   @Get("conversations")
   conversations(@CurrentUser() user: RequestUser) {
-    return this.communications.conversations(user.id);
+    return this.communications.conversations(user);
   }
 
   @Post("conversations")
@@ -38,16 +38,16 @@ export class CommunicationsController {
 
   @Get("conversations/:id/messages")
   messages(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Query() query: ListMessagesDto) {
-    return this.communications.messages(user.id, id, query.cursor);
+    return this.communications.messages(user, id, query.cursor);
   }
 
   @Post("conversations/:id/messages")
   sendMessage(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string, @Body() dto: SendMessageDto) {
-    return this.communications.sendMessage(user.id, id, dto);
+    return this.communications.sendMessage(user, id, dto);
   }
 
   @Post("conversations/:id/read")
   readConversation(@CurrentUser() user: RequestUser, @Param("id", new ParseUUIDPipe()) id: string) {
-    return this.communications.readConversation(user.id, id);
+    return this.communications.readConversation(user, id);
   }
 }

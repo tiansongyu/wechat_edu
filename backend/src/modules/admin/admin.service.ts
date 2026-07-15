@@ -273,10 +273,12 @@ export class AdminService {
       if (!rows.length) throw new NotFoundException("报名记录不存在");
       await tx.$queryRawUnsafe(`SELECT id FROM job_posts WHERE id = $1::uuid FOR UPDATE`, rows[0].jobId);
       const application = await tx.application.findUnique({
-        where: { id: applicationId },
-        include: { job: true, appointment: true }
+        where: { id: applicationId }
       });
       if (!application) throw new NotFoundException("报名记录不存在");
+      const job = await tx.jobPost.findUnique({ where: { id: application.jobId } });
+      const appointment = await tx.appointment.findUnique({ where: { applicationId } });
+      if (!job) throw new NotFoundException("报名关联发布不存在");
       if (application.version !== dto.version) throw new ConflictException("报名记录已变化，请刷新后重试");
       if (application.status === dto.status) throw new ConflictException("报名已经是目标状态");
 
@@ -290,23 +292,23 @@ export class AdminService {
 
       if (
         dto.status === ApplicationStatus.CANCELLED &&
-        application.appointment?.status === AppointmentStatus.COMPLETED
+        appointment?.status === AppointmentStatus.COMPLETED
       ) {
         throw new ConflictException("预约已完成，不能撤销录用");
       }
 
       if (dto.status === ApplicationStatus.ACCEPTED) {
-        if (application.job.status !== JobStatus.PUBLISHED) throw new ConflictException("该发布当前不可录用");
+        if (job.status !== JobStatus.PUBLISHED) throw new ConflictException("该发布当前不可录用");
         const acceptedCount = await tx.application.count({
           where: { jobId: application.jobId, status: ApplicationStatus.ACCEPTED }
         });
-        if (acceptedCount >= application.job.capacity) throw new ConflictException("该发布名额已满");
+        if (acceptedCount >= job.capacity) throw new ConflictException("该发布名额已满");
         await tx.application.update({
           where: { id: applicationId },
           data: { status: dto.status, statusNote: dto.note || "管理员确认录用", handledAt: new Date(), version: { increment: 1 } }
         });
         await tx.appointment.create({ data: { jobId: application.jobId, applicationId, note: dto.note } });
-        if (acceptedCount + 1 >= application.job.capacity) {
+        if (acceptedCount + 1 >= job.capacity) {
           const remaining = await tx.application.findMany({
             where: { jobId: application.jobId, status: ApplicationStatus.PENDING },
             select: { id: true, teacherId: true }
@@ -334,11 +336,11 @@ export class AdminService {
         });
         if (
           dto.status === ApplicationStatus.CANCELLED &&
-          application.appointment &&
+          appointment &&
           ([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.DISPUTED] as AppointmentStatus[])
-            .includes(application.appointment.status)
+            .includes(appointment.status)
         ) {
-          const appointmentBefore = application.appointment;
+          const appointmentBefore = appointment;
           const cancelledAppointment = await tx.appointment.update({
             where: { id: appointmentBefore.id },
             data: {
@@ -357,7 +359,7 @@ export class AdminService {
                 appointmentId: cancelledAppointment.id,
                 jobId: application.jobId,
                 applicationId,
-                ownerId: application.job.ownerId,
+                ownerId: job.ownerId,
                 teacherId: application.teacherId,
                 actorId,
                 reason: cancelledAppointment.statusNote,
@@ -397,7 +399,7 @@ export class AdminService {
           payload: {
             applicationId,
             teacherId: application.teacherId,
-            ownerId: application.job.ownerId,
+            ownerId: job.ownerId,
             jobId: application.jobId,
             actorId,
             note: updated.statusNote
@@ -444,10 +446,12 @@ export class AdminService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: { job: true, application: true }
+        where: { id: appointmentId }
       });
       if (!appointment) throw new NotFoundException("预约不存在");
+      const job = await tx.jobPost.findUnique({ where: { id: appointment.jobId } });
+      const application = await tx.application.findUnique({ where: { id: appointment.applicationId } });
+      if (!job || !application) throw new NotFoundException("预约关联信息不存在");
       if (appointment.version !== dto.version) throw new ConflictException("预约记录已变化，请刷新后重试");
       if (appointment.status === dto.status) throw new ConflictException("预约已经是目标状态");
       const transitions: Record<AppointmentStatus, AppointmentStatus[]> = {
@@ -477,7 +481,7 @@ export class AdminService {
       });
       if (!result.count) throw new ConflictException("预约记录已变化，请刷新后重试");
       const updated = await tx.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
-      if (dto.status === AppointmentStatus.CANCELLED && appointment.application.status === ApplicationStatus.ACCEPTED) {
+      if (dto.status === AppointmentStatus.CANCELLED && application.status === ApplicationStatus.ACCEPTED) {
         await tx.application.update({
           where: { id: appointment.applicationId },
           data: { status: ApplicationStatus.CANCELLED, statusNote: resolutionNote, handledAt: new Date(), version: { increment: 1 } }
@@ -499,8 +503,8 @@ export class AdminService {
             appointmentId,
             jobId: appointment.jobId,
             applicationId: appointment.applicationId,
-            ownerId: appointment.job.ownerId,
-            teacherId: appointment.application.teacherId,
+            ownerId: job.ownerId,
+            teacherId: application.teacherId,
             actorId,
             reason: updated.statusNote
           }

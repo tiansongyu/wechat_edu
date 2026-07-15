@@ -18,6 +18,12 @@ function getTimestamp(value) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function communicationRoleMeta(role) {
+  return role === "TEACHER"
+    ? { role: "TEACHER", label: "老师沟通", tone: "teacher" }
+    : { role: "PARENT", label: "家长沟通", tone: "parent" };
+}
+
 function formatMessageTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -97,6 +103,10 @@ Page({
   data: {
     conversationId: "",
     conversationTitle: "在线沟通",
+    activeRole: "PARENT",
+    roleLabel: "家长沟通",
+    roleTone: "parent",
+    loadedRole: "",
     accountId: "",
     messages: [],
     nextCursor: "",
@@ -119,7 +129,14 @@ Page({
   onLoad(options = {}) {
     const conversationId = String(options.id || "").trim();
     const conversationTitle = safeDecode(options.title).trim() || "在线沟通";
-    this.setData({ conversationId, conversationTitle });
+    const roleMeta = communicationRoleMeta(api.getActiveRole());
+    this.setData({
+      conversationId,
+      conversationTitle,
+      activeRole: roleMeta.role,
+      roleLabel: roleMeta.label,
+      roleTone: roleMeta.tone
+    });
     wx.setNavigationBarTitle({ title: conversationTitle.slice(0, 12) });
 
     if (!conversationId) {
@@ -133,6 +150,26 @@ Page({
   },
 
   onShow() {
+    const roleMeta = communicationRoleMeta(api.getActiveRole());
+    const roleChanged = Boolean(this.data.loadedRole && this.data.loadedRole !== roleMeta.role);
+    this.setData({ activeRole: roleMeta.role, roleLabel: roleMeta.label, roleTone: roleMeta.tone });
+    if (roleChanged && this.data.conversationId) {
+      this._hasLoadedOnce = false;
+      this._pendingMessage = null;
+      this.setData({
+        messages: [],
+        nextCursor: "",
+        hasMore: false,
+        loaded: false,
+        loadedRole: "",
+        loadError: "",
+        olderError: "",
+        readSyncError: "",
+        inputValue: ""
+      });
+      this.initialize();
+      return;
+    }
     if (!this._hasLoadedOnce || !this.data.conversationId) return;
     this.loadInitialMessages({ quiet: true, force: true });
     this.syncReadStatus();
@@ -192,6 +229,7 @@ Page({
         nextCursor: page.nextCursor,
         hasMore: Boolean(page.nextCursor),
         loaded: true,
+        loadedRole: this.data.activeRole,
         loadError: "",
         olderError: "",
         scrollIntoView: ""
@@ -289,7 +327,10 @@ Page({
   },
 
   handleInput(event) {
-    this.setData({ inputValue: event.detail.value });
+    const inputValue = event.detail.value;
+    const signature = `${this.data.conversationId}\n${String(inputValue || "").trim()}`;
+    if (this._pendingMessage && this._pendingMessage.signature !== signature) this._pendingMessage = null;
+    this.setData({ inputValue });
   },
 
   handleInputFocus() {
@@ -312,7 +353,16 @@ Page({
     this._sendPending = true;
     this.setData({ sending: true });
     try {
-      const response = await api.sendConversationMessage(this.data.conversationId, content);
+      const signature = `${this.data.conversationId}\n${content}`;
+      if (!this._pendingMessage || this._pendingMessage.signature !== signature) {
+        this._pendingMessage = { signature, clientMessageId: api.createClientMessageId() };
+      }
+      const response = await api.sendConversationMessage(
+        this.data.conversationId,
+        content,
+        this._pendingMessage.clientMessageId
+      );
+      this._pendingMessage = null;
       const payload = response && (response.message || response.data) ? (response.message || response.data) : response;
       const sentMessage = payload && payload.id
         ? mapMessage(payload, this.data.accountId, true)

@@ -70,7 +70,10 @@ describe("AuthService WeChat identity exchange", () => {
       },
       auditLog: { create: jest.fn().mockResolvedValue({}) }
     };
-    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const prisma = {
+      account: { findUniqueOrThrow: jest.fn().mockResolvedValue({ ...current, nickname: "新 昵称" }) },
+      $transaction: jest.fn((callback) => callback(tx))
+    };
     const auth = new AuthService(prisma as any, {} as any, { get: jest.fn() } as any);
 
     await expect(auth.updateAccount("account-1", RoleCode.PARENT, { nickname: "  新   昵称  " }))

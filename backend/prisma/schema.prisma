@@ -235,6 +235,7 @@ model JobPost {
   applications     Application[]
   favorites        Favorite[]
   appointments     Appointment[]
+  conversations    Conversation[]
 
   @@index([status, type, district, subject, publishedAt(sort: Desc)])
   @@index([ownerId, status, createdAt(sort: Desc)])
@@ -351,25 +352,30 @@ model Favorite {
 }
 
 model Conversation {
-  id        String               @id @default(uuid()) @db.Uuid
-  createdAt DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime             @updatedAt @db.Timestamptz(3)
-  members   ConversationMember[]
-  messages  Message[]
+  id         String               @id @default(uuid()) @db.Uuid
+  jobId      String?              @db.Uuid
+  contextKey String?              @unique @db.VarChar(160)
+  createdAt  DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
+  job        JobPost?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  members    ConversationMember[]
+  messages   Message[]
 
+  @@index([jobId, updatedAt(sort: Desc)])
   @@map("conversations")
 }
 
 model ConversationMember {
   conversationId String       @db.Uuid
   accountId      String       @db.Uuid
+  role           RoleCode?
   lastReadAt     DateTime?    @db.Timestamptz(3)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, accountId])
-  @@index([accountId, createdAt(sort: Desc)])
+  @@index([accountId, role, createdAt(sort: Desc)])
   @@map("conversation_members")
 }
 
@@ -395,11 +401,12 @@ model Notification {
   title         String           @db.VarChar(120)
   content       String           @db.VarChar(1000)
   data          Json?
-  sourceEventId String?          @unique @db.Uuid
+  sourceEventId String?          @db.Uuid
   readAt        DateTime?        @db.Timestamptz(3)
   createdAt     DateTime         @default(now()) @db.Timestamptz(3)
   account       Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  @@unique([accountId, sourceEventId])
   @@index([accountId, readAt, createdAt(sort: Desc)])
   @@map("notifications")
 }

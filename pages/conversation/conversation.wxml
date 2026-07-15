@@ -1,4 +1,5 @@
 <view class="conversation-page">
+  <view class="conversation-identity"><text class="conversation-identity__role conversation-identity__role--{{roleTone}}">{{roleLabel}}</text><text class="conversation-identity__peer">正在与 {{conversationTitle}} 沟通</text></view>
   <view class="conversation-banner conversation-banner--sync" wx:if="{{refreshing}}">
     <view class="conversation-banner__spinner"></view>
     <text>正在同步最新消息</text>

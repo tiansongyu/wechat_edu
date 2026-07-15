@@ -32,13 +32,18 @@ function confirmedAppointment(overrides: Record<string, unknown> = {}) {
 }
 
 function serviceWith(appointment: ReturnType<typeof confirmedAppointment>, updated = appointment) {
+  const { job, application, ...appointmentRecord } = appointment;
   const tx = {
     $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: APPOINTMENT_ID }]),
     appointment: {
-      findUnique: jest.fn().mockResolvedValue(appointment),
+      findUnique: jest.fn().mockResolvedValue(appointmentRecord),
       update: jest.fn().mockResolvedValue(updated)
     },
-    application: { update: jest.fn().mockResolvedValue({}) },
+    jobPost: { findUnique: jest.fn().mockResolvedValue(job) },
+    application: {
+      findUnique: jest.fn().mockResolvedValue(application),
+      update: jest.fn().mockResolvedValue({})
+    },
     idempotencyRecord: {
       findUnique: jest.fn().mockResolvedValue(null),
       delete: jest.fn().mockResolvedValue({}),

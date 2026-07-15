@@ -39,6 +39,8 @@ function appointmentContext(
 function appointment(status: AppointmentStatus = AppointmentStatus.COMPLETED) {
   return {
     id: APPOINTMENT_ID,
+    jobId: "00000000-0000-4000-8000-000000000020",
+    applicationId: "00000000-0000-4000-8000-000000000021",
     status,
     parentCompletedAt: status === AppointmentStatus.COMPLETED ? new Date("2026-07-16T00:00:00.000Z") : null,
     teacherCompletedAt: status === AppointmentStatus.COMPLETED ? new Date("2026-07-16T00:01:00.000Z") : null,
@@ -57,6 +59,8 @@ function transaction(overrides: Record<string, unknown> = {}) {
       create: jest.fn().mockResolvedValue({})
     },
     appointment: { findUnique: jest.fn().mockResolvedValue(appointment()) },
+    jobPost: { findUnique: jest.fn().mockResolvedValue(appointment().job) },
+    application: { findUnique: jest.fn().mockResolvedValue(appointment().application) },
     review: {
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({

@@ -27,7 +27,7 @@ export class AuthService {
       select: { id: true }
     });
     const isNewAccount = !existing;
-    const account = await this.prisma.$transaction(async (tx) => {
+    const accountId = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const current = existing
         ? await tx.account.update({
@@ -61,11 +61,11 @@ export class AuthService {
           create: { accountId: current.id, roleCode }
         });
       }
-      await Promise.all([
-        tx.parentProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } }),
-        tx.teacherProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } }),
-        tx.userPreference.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } })
-      ]);
+      // Interactive transactions share one PostgreSQL connection. Keep these
+      // writes sequential so pg never receives overlapping queries on it.
+      await tx.parentProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } });
+      await tx.teacherProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } });
+      await tx.userPreference.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } });
       await tx.auditLog.create({
         data: {
           actorId: current.id,
@@ -75,10 +75,14 @@ export class AuthService {
           after: { provider: "WECHAT", isNewAccount }
         }
       });
-      return tx.account.findUniqueOrThrow({
-        where: { id: current.id },
-        include: { roles: true, teacherProfile: true, parentProfile: true }
-      });
+      return current.id;
+    });
+    // Prisma may load several included relations concurrently. Resolve those
+    // after the interactive transaction has released its single pg client so
+    // relation reads cannot overlap on the transaction connection.
+    const account = await this.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      include: { roles: true, teacherProfile: true, parentProfile: true }
     });
     const roles = account.roles.map((item) => item.roleCode);
     const requested = dto.activeRole || RoleCode.PARENT;
@@ -176,18 +180,17 @@ export class AuthService {
     if (!nickname) throw new BadRequestException("昵称不能为空");
     if (nickname.length > 30) throw new BadRequestException("昵称长度不能超过30个字符");
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedAccountId = await this.prisma.$transaction(async (tx) => {
       const current = await tx.account.findUniqueOrThrow({
         where: { id: accountId },
-        include: { roles: true, parentProfile: true, teacherProfile: true }
+        select: { id: true, nickname: true, status: true }
       });
       this.assertActive(current.status);
-      if (current.nickname === nickname) return this.presentAccount(current, activeRole);
+      if (current.nickname === nickname) return current.id;
 
-      const updated = await tx.account.update({
+      await tx.account.update({
         where: { id: accountId },
-        data: { nickname },
-        include: { roles: true, parentProfile: true, teacherProfile: true }
+        data: { nickname }
       });
       await tx.auditLog.create({
         data: {
@@ -199,8 +202,13 @@ export class AuthService {
           after: { nickname }
         }
       });
-      return this.presentAccount(updated, activeRole);
+      return current.id;
     });
+    const updated = await this.prisma.account.findUniqueOrThrow({
+      where: { id: updatedAccountId },
+      include: { roles: true, parentProfile: true, teacherProfile: true }
+    });
+    return this.presentAccount(updated, activeRole);
   }
 
   private async createSession(

@@ -33,7 +33,11 @@ function serviceWithAppointment(record: ReturnType<typeof appointment>) {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: jest.fn().mockResolvedValue(record)
     },
-    application: { update: jest.fn().mockResolvedValue({}) },
+    jobPost: { findUnique: jest.fn().mockResolvedValue(record.job) },
+    application: {
+      findUnique: jest.fn().mockResolvedValue(record.application),
+      update: jest.fn().mockResolvedValue({})
+    },
     outboxEvent: { create: jest.fn().mockResolvedValue({}) },
     auditLog: { create: jest.fn().mockResolvedValue({}) }
   };
@@ -83,7 +87,11 @@ describe("AdminService appointment command safety", () => {
         update: jest.fn().mockResolvedValue(cancelledApplication),
         findUniqueOrThrow: jest.fn().mockResolvedValue(cancelledApplication)
       },
-      appointment: { update: jest.fn().mockResolvedValue(cancelledAppointment) },
+      jobPost: { findUnique: jest.fn().mockResolvedValue(beforeApplication.job) },
+      appointment: {
+        findUnique: jest.fn().mockResolvedValue(beforeAppointment),
+        update: jest.fn().mockResolvedValue(cancelledAppointment)
+      },
       outboxEvent: { create: jest.fn().mockResolvedValue({}) },
       auditLog: { create: jest.fn().mockResolvedValue({}) }
     };

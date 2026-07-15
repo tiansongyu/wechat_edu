@@ -44,7 +44,7 @@ function getAccount() {
 }
 
 function getPlatformOverview() {
-  return request("/api/v1/platform/overview");
+  return request("/api/v1/platform/overview", { auth: false });
 }
 
 function updateAccount(data) {
@@ -151,12 +151,12 @@ function reopenJob(id) {
   return request(`/api/v1/jobs/${id}/reopen`, { method: "POST" });
 }
 
-function applyJob(jobId, coverLetter = "") {
-  const idempotencyKey = `${getDeviceId()}-${jobId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function applyJob(jobId, coverLetter = "", idempotencyKey) {
+  const key = idempotencyKey || createCommandKey("job-apply", jobId);
   return request(`/api/v1/jobs/${jobId}/applications`, {
     method: "POST",
     data: { coverLetter },
-    header: { "Idempotency-Key": idempotencyKey }
+    header: { "Idempotency-Key": key }
   });
 }
 
@@ -298,11 +298,15 @@ function listConversationMessages(id, cursor) {
   return request(`/api/v1/conversations/${id}/messages${queryString({ cursor })}`);
 }
 
-function sendConversationMessage(id, content) {
-  const clientMessageId = uuidV4();
+function createClientMessageId() {
+  return uuidV4();
+}
+
+function sendConversationMessage(id, content, clientMessageId) {
+  const messageId = clientMessageId || createClientMessageId();
   return request(`/api/v1/conversations/${id}/messages`, {
     method: "POST",
-    data: { clientMessageId, content }
+    data: { clientMessageId: messageId, content }
   });
 }
 
@@ -406,6 +410,7 @@ module.exports = {
   applyJob,
   cancelApplication,
   closeJob,
+  createClientMessageId,
   createCommandKey,
   createJob,
   createReview,

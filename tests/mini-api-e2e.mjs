@@ -341,10 +341,16 @@ const [firstApply, duplicateApply] = await Promise.all([
     method: "POST",
     token: teacher.accessToken,
     headers: { "idempotency-key": idempotencyKey },
-    body: { coverLetter: "重复请求应返回相同结果。" }
+    body: { coverLetter: "四年教学经验，可以长期授课。" }
   })
 ]);
 assert.equal(firstApply.id, duplicateApply.id);
+await expectStatus(409, `/api/v1/jobs/${acceptedJob.id}/applications`, {
+  method: "POST",
+  token: teacher.accessToken,
+  headers: { "idempotency-key": idempotencyKey },
+  body: { coverLetter: "同一幂等键不能代表不同报名内容。" }
+});
 
 const rejectApply = await mini("POST /api/v1/jobs/:jobId/applications", `/api/v1/jobs/${rejectedJob.id}/applications`, {
   method: "POST",
@@ -415,10 +421,15 @@ const duplicateMessage = await mini(
   {
     method: "POST",
     token: parent.accessToken,
-    body: { clientMessageId, content: "重复消息不会生成第二条。" }
+    body: { clientMessageId, content: "  您好，想沟通一下课程安排。  " }
   }
 );
 assert.equal(firstMessage.id, duplicateMessage.id);
+await expectStatus(409, `/api/v1/conversations/${conversation.id}/messages`, {
+  method: "POST",
+  token: parent.accessToken,
+  body: { clientMessageId, content: "同一客户端消息标识不能发送不同内容。" }
+});
 
 const messages = await mini(
   "GET /api/v1/conversations/:id/messages",

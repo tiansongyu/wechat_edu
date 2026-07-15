@@ -67,11 +67,15 @@ const applicationsTemplate = fs.readFileSync(path.join(root, "pages/job-applicat
 const reviewsSource = fs.readFileSync(path.join(root, "pages/reviews/reviews.js"), "utf8");
 const homeTemplate = fs.readFileSync(path.join(root, "pages/index/index.wxml"), "utf8");
 const detailTemplate = fs.readFileSync(path.join(root, "pages/job-detail/job-detail.wxml"), "utf8");
+const mapTemplate = fs.readFileSync(path.join(root, "pages/map/map.wxml"), "utf8");
+const messagesTemplate = fs.readFileSync(path.join(root, "pages/messages/messages.wxml"), "utf8");
+const conversationTemplate = fs.readFileSync(path.join(root, "pages/conversation/conversation.wxml"), "utf8");
 const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
 assert.match(publishTemplate, /picker[^>]+mode="region"/);
 assert.doesNotMatch(publishTemplate, /data-field="address"/);
 assert.match(profileTemplate, /picker[^>]+mode="region"/);
 assert.match(profileTemplate, /input[^>]+type="nickname"/);
+assert.match(profileTemplate, /profile-warning/);
 assert.doesNotMatch(profileTemplate, /data-field="(?:city|district|address)"/);
 assert.match(teacherTemplate, /picker[^>]+mode="region"/);
 assert.doesNotMatch(teacherTemplate, /data-field="serviceDistricts"/);
@@ -82,6 +86,11 @@ assert.match(applicationsTemplate, /reviewLabel/);
 assert.match(homeTemplate, /platformOverview\.brand\.name/);
 assert.match(homeTemplate, /bindtap="retryPlatformOverview"/);
 assert.match(detailTemplate, /当前身份/);
+assert.match(mapTemplate, /picker[^>]+bindchange="changeDistrict"/);
+assert.match(mapTemplate, /bindtap="openLocationSetting"/);
+assert.match(messagesTemplate, /messages-role--\{\{roleTone\}\}/);
+assert.match(messagesTemplate, /message-card__badge/);
+assert.match(conversationTemplate, /conversation-identity__role--\{\{roleTone\}\}/);
 assert.match(appSource, /switchActiveRole\(role\)/);
 assert.equal((appSource.match(/switchActiveRole\(role\)/g) || []).length, 2, "role switching should have one public app method plus its queued recursion");
 for (const rolePage of ["pages/index/index.js", "pages/profile/profile.js", "pages/job-detail/job-detail.js", "pages/reviews/reviews.js"]) {
@@ -100,6 +109,13 @@ const appDefinition = loadDefinition("app.js", "App");
 assert.ok(pages.every((page) => page.data && typeof page === "object"));
 assert.equal(typeof pages[0].loadData, "function");
 assert.equal(typeof pages[1].loadNearby, "function");
+assert.equal(typeof pages[1].openLocationSetting, "function");
+assert.throws(() => pages[1].normalizeJobs("<html>tunnel warning</html>"), /数据格式异常/);
+assert.deepEqual(pages[1].buildDistricts([
+  { district: "南山区" },
+  { district: "福田区" },
+  { district: "南山区" }
+]), ["全部区域", "南山区", "福田区"]);
 assert.equal(typeof pages[4].saveNickname, "function");
 assert.equal(typeof pages[7].confirmAndHandle, "function");
 assert.equal(typeof pages[8].sendMessage, "function");
@@ -124,6 +140,8 @@ assert.equal(tabbar.data.items[2].key, "publish");
 
 const requestClient = require(path.join(root, "utils/request"));
 const apiClient = require(path.join(root, "utils/api"));
+const locationPermission = require(path.join(root, "utils/location-permission"));
+assert.equal(locationPermission.isUserCancel({ errMsg: "chooseLocation:fail cancel" }), true);
 assert.deepEqual(apiClient.getTeacherApplicationEligibility({ auditStatus: "APPROVED" }), {
   canApply: true,
   actionLabel: "立即申请",
@@ -278,6 +296,127 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/appointments\/appointment-1\/counterpart-reputation$/);
     await apiClient.getPlatformOverview();
     assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/platform\/overview$/);
+    await apiClient.sendConversationMessage("conversation-1", "保持幂等的消息", "fixed-client-message-id");
+    const sendMessageRequest = capturedRequests[capturedRequests.length - 1];
+    assert.match(sendMessageRequest.url, /\/api\/v1\/conversations\/conversation-1\/messages$/);
+    assert.deepEqual(sendMessageRequest.data, { clientMessageId: "fixed-client-message-id", content: "保持幂等的消息" });
+
+    const originalGetSetting = wx.getSetting;
+    const originalOpenSetting = wx.openSetting;
+    let locationRetryCount = 0;
+    wx.getSetting = ({ success }) => success({ authSetting: { "scope.userLocation": false } });
+    assert.deepEqual(await locationPermission.getLocationPermissionState({ errMsg: "getLocation:fail auth deny" }), { denied: true });
+    wx.openSetting = ({ success }) => success({ authSetting: { "scope.userLocation": true } });
+    locationPermission.openLocationSetting(() => { locationRetryCount += 1; });
+    assert.equal(locationRetryCount, 1, "granting location permission should immediately retry the interrupted action");
+    const originalListAllJobs = apiClient.listAllJobs;
+    apiClient.listAllJobs = async () => ({ items: [
+      { id: "fallback-job-1", title: "南山数学", district: "南山区", status: "PUBLISHED" },
+      { id: "fallback-job-2", title: "福田英语", district: "福田区", status: "PUBLISHED" }
+    ] });
+    const fallbackMapPage = {
+      ...pages[1],
+      data: { ...pages[1].data },
+      getLocation: async () => { throw new Error("getLocation:fail auth deny"); },
+      setData(update, callback) { this.data = { ...this.data, ...update }; if (callback) callback(); }
+    };
+    await fallbackMapPage.loadNearby.call(fallbackMapPage);
+    assert.equal(fallbackMapPage.data.fallbackMode, true);
+    assert.equal(fallbackMapPage.data.locationPermissionDenied, true);
+    assert.deepEqual(fallbackMapPage.data.districts, ["全部区域", "南山区", "福田区"]);
+    assert.equal(fallbackMapPage.data.markers.length, 0, "location fallback must never invent map coordinates");
+    apiClient.listAllJobs = originalListAllJobs;
+    wx.getSetting = originalGetSetting;
+    wx.openSetting = originalOpenSetting;
+
+    const originalListNotifications = apiClient.listNotifications;
+    const originalListConversations = apiClient.listConversations;
+    storage.set(requestClient.ROLE_KEY, "TEACHER");
+    apiClient.listNotifications = async () => ({ unexpected: "html or malformed payload" });
+    apiClient.listConversations = async () => ([{
+      id: "conversation-ui-1",
+      viewerRole: "TEACHER",
+      members: [{ account: { id: "peer-1", nickname: "一个非常非常长的家长昵称" } }],
+      messages: [{ content: "这是一段用于验证长消息省略显示且不会挤压时间和未读徽标的正文", createdAt: new Date().toISOString() }],
+      unreadCount: 120,
+      updatedAt: new Date().toISOString()
+    }]);
+    const partialMessagesPage = {
+      ...pages[3],
+      data: { ...pages[3].data },
+      setData(update, callback) { this.data = { ...this.data, ...update }; if (callback) callback(); }
+    };
+    await partialMessagesPage.loadMessages.call(partialMessagesPage, false);
+    assert.equal(partialMessagesPage.data.error, "");
+    assert.match(partialMessagesPage.data.warning, /平台通知暂未同步/);
+    assert.equal(partialMessagesPage.data.messages.length, 1, "a malformed notification payload must not hide healthy conversations");
+    assert.equal(partialMessagesPage.data.messages[0].unreadLabel, "99+");
+    assert.equal(partialMessagesPage.data.messages[0].roleLabel, "老师沟通");
+    assert.equal(partialMessagesPage.data.roleLabel, "老师沟通");
+    storage.set(requestClient.ROLE_KEY, "PARENT");
+    apiClient.listConversations = async () => ({ unexpected: "malformed after role switch" });
+    await partialMessagesPage.loadMessages.call(partialMessagesPage, false);
+    assert.equal(partialMessagesPage.data.roleLabel, "家长沟通");
+    assert.equal(partialMessagesPage.data.messages.length, 0, "a failed role switch refresh must never expose the previous role's conversations");
+    assert.match(partialMessagesPage.data.error, /数据格式异常/);
+    apiClient.listNotifications = originalListNotifications;
+    apiClient.listConversations = originalListConversations;
+
+    let roleReloadCount = 0;
+    const roleChangedConversationPage = {
+      ...pages[8],
+      _hasLoadedOnce: true,
+      data: {
+        ...pages[8].data,
+        conversationId: "teacher-only-conversation",
+        activeRole: "TEACHER",
+        roleLabel: "老师沟通",
+        roleTone: "teacher",
+        loadedRole: "TEACHER",
+        loaded: true,
+        messages: [{ id: "teacher-private-message" }],
+        inputValue: "老师身份下的草稿"
+      },
+      setData(update, callback) { this.data = { ...this.data, ...update }; if (callback) callback(); },
+      initialize() { roleReloadCount += 1; }
+    };
+    pages[8].onShow.call(roleChangedConversationPage);
+    assert.equal(roleChangedConversationPage.data.roleLabel, "家长沟通");
+    assert.equal(roleChangedConversationPage.data.messages.length, 0, "switching role must immediately clear the previous role's open conversation");
+    assert.equal(roleChangedConversationPage.data.inputValue, "");
+    assert.equal(roleReloadCount, 1);
+
+    const originalSendConversationMessage = apiClient.sendConversationMessage;
+    const originalCreateClientMessageId = apiClient.createClientMessageId;
+    const sentClientIds = [];
+    apiClient.createClientMessageId = () => "stable-client-message-id";
+    apiClient.sendConversationMessage = async (id, content, clientMessageId) => {
+      sentClientIds.push(clientMessageId);
+      if (sentClientIds.length === 1) throw new Error("模拟发送响应中断");
+      return { id: "message-retry-success", content, createdAt: new Date().toISOString() };
+    };
+    const retryConversationPage = {
+      ...pages[8],
+      data: {
+        ...pages[8].data,
+        conversationId: "conversation-retry",
+        accountId: "test-account",
+        loaded: true,
+        loading: false,
+        inputValue: "  重试时保持同一条消息  ",
+        messages: []
+      },
+      setData(update, callback) { this.data = { ...this.data, ...update }; if (callback) callback(); }
+    };
+    await retryConversationPage.sendMessage.call(retryConversationPage);
+    assert.equal(retryConversationPage.data.inputValue, "  重试时保持同一条消息  ");
+    assert.equal(retryConversationPage._pendingMessage.clientMessageId, "stable-client-message-id");
+    await retryConversationPage.sendMessage.call(retryConversationPage);
+    assert.deepEqual(sentClientIds, ["stable-client-message-id", "stable-client-message-id"], "an unchanged retry must reuse clientMessageId");
+    assert.equal(retryConversationPage._pendingMessage, null);
+    assert.equal(retryConversationPage.data.inputValue, "");
+    apiClient.sendConversationMessage = originalSendConversationMessage;
+    apiClient.createClientMessageId = originalCreateClientMessageId;
 
     const originalOverview = apiClient.getPlatformOverview;
     apiClient.getPlatformOverview = async () => ({
@@ -376,6 +515,67 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(invalidTeacherListCalls, 0, "parent appointment summaries must never call the public teacher-review route");
     apiClient.listTeacherReviews = originalListTeacherReviews;
 
+    const profileApiMethods = [
+      "getAccount",
+      "getMineJobs",
+      "listFavoriteJobs",
+      "listAllParentApplications",
+      "getPreferences",
+      "listAppointments",
+      "listMyReceivedReviews"
+    ];
+    const originalProfileApi = Object.fromEntries(profileApiMethods.map((method) => [method, apiClient[method]]));
+    apiClient.getAccount = async () => ({
+      id: "test-account",
+      nickname: "测试家长",
+      activeRole: "PARENT",
+      parentProfile: { province: "广东省", city: "深圳市", district: "南山区" },
+      teacherProfile: {}
+    });
+    apiClient.getMineJobs = async () => ({ data: { items: [{
+      id: "profile-job",
+      ownerId: "test-account",
+      type: "TEACHING_NEED",
+      title: "高一数学辅导",
+      status: "PUBLISHED"
+    }] } });
+    apiClient.listFavoriteJobs = async () => "<html>临时网关提示</html>";
+    apiClient.listAllParentApplications = async () => ({ results: [{
+      id: "profile-application",
+      jobId: "profile-job",
+      status: "PENDING",
+      job: { id: "profile-job", title: "高一数学辅导" },
+      teacher: { nickname: "陈老师" }
+    }] });
+    apiClient.getPreferences = async () => { throw new Error("偏好接口暂不可用"); };
+    apiClient.listAppointments = async () => ({ data: [{
+      id: "profile-appointment",
+      status: "CONFIRMED",
+      job: { id: "profile-job", ownerId: "test-account", title: "高一数学辅导" },
+      application: { teacherId: "teacher-account" },
+      completionActions: {}
+    }] });
+    apiClient.listMyReceivedReviews = async () => ({
+      items: [],
+      nextCursor: null,
+      summary: { displayAverage: null, count: 0, levelLabel: "评价积累中" }
+    });
+    const resilientProfilePage = {
+      ...pages[4],
+      data: { ...pages[4].data, settings: { ...pages[4].data.settings } },
+      setData(update, callback) { this.data = { ...this.data, ...update }; if (callback) callback(); }
+    };
+    assert.equal(await resilientProfilePage.loadData.call(resilientProfilePage, false), true);
+    assert.equal(resilientProfilePage.data.error, "", "one malformed optional collection must not fail the profile page");
+    assert.equal(resilientProfilePage.data.posts.length, 1, "nested data.items envelopes should be accepted");
+    assert.equal(resilientProfilePage.data.applications.length, 1, "results envelopes should be accepted");
+    assert.equal(resilientProfilePage.data.appointments.length, 1, "data array envelopes should be accepted");
+    assert.equal(resilientProfilePage.data.favorites.length, 0);
+    assert.match(resilientProfilePage.data.warning, /我的收藏/);
+    assert.match(resilientProfilePage.data.warning, /偏好设置/);
+    assert.match(resilientProfilePage.data.warning, /其他功能仍可正常使用/);
+    for (const method of profileApiMethods) apiClient[method] = originalProfileApi[method];
+
     const originalUpdateAccount = apiClient.updateAccount;
     let nicknamePayload;
     apiClient.updateAccount = async (payload) => {
@@ -398,7 +598,7 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(profilePage.data.showNicknameEditor, false);
     apiClient.updateAccount = originalUpdateAccount;
 
-    console.log("Smoke checks passed: database-only client flows, bidirectional completion, verified review API contracts and idempotency, nickname editing, teacher application eligibility, valid empty JSON writes, environment-aware tunnel headers, 10 pages, stable session identity, and native tab bar.");
+    console.log("Smoke checks passed: database-only client flows, permission-aware location fallback, role-scoped resilient message rendering, stable chat retries, verified reviews and commands, nickname editing, valid empty JSON writes, 10 pages, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);

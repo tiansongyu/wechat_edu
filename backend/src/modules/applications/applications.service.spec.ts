@@ -18,9 +18,13 @@ describe("ApplicationsService", () => {
 
   it("returns a still-valid idempotent response without creating another application", async () => {
     const cachedResponse = { id: "cached-application", status: "PENDING" };
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify({ command: "apply", coverLetter: "" }))
+      .digest("hex");
     const prisma = {
       idempotencyRecord: {
         findUnique: jest.fn().mockResolvedValue({
+          requestHash,
           response: cachedResponse,
           expiresAt: new Date(Date.now() + 60_000)
         })
@@ -35,6 +39,53 @@ describe("ApplicationsService", () => {
       "device-request-key",
       { coverLetter: "" }
     )).resolves.toEqual(cachedResponse);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a legacy apply record without a request hash", async () => {
+    const prisma = {
+      idempotencyRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          requestHash: null,
+          response: { id: "legacy-application" },
+          expiresAt: new Date(Date.now() + 60_000)
+        })
+      },
+      $transaction: jest.fn()
+    };
+    const service = new ApplicationsService(prisma as never);
+
+    await expect(service.apply(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+      "legacy-key-without-hash",
+      { coverLetter: "" }
+    )).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an apply key reused with a different normalized cover letter", async () => {
+    const storedHash = createHash("sha256")
+      .update(JSON.stringify({ command: "apply", coverLetter: "第一次申请说明" }))
+      .digest("hex");
+    const prisma = {
+      idempotencyRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          requestHash: storedHash,
+          response: { id: "cached-application" },
+          expiresAt: new Date(Date.now() + 60_000)
+        })
+      },
+      $transaction: jest.fn()
+    };
+    const service = new ApplicationsService(prisma as never);
+
+    await expect(service.apply(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+      "same-apply-key",
+      { coverLetter: "第二次不同说明" }
+    )).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

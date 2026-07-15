@@ -1,4 +1,5 @@
 const api = require("../../utils/api");
+const locationPermission = require("../../utils/location-permission");
 
 Page({
   data: {
@@ -6,6 +7,7 @@ Page({
     error: "",
     fallbackMode: false,
     fallbackReason: "",
+    locationPermissionDenied: false,
     query: "",
     districts: ["全部区域", "南山区", "福田区", "宝安区", "龙华区", "罗湖区"],
     districtIndex: 0,
@@ -29,32 +31,49 @@ Page({
   },
 
   async loadNearby() {
+    const requestId = (this._nearbyLoadRequestId || 0) + 1;
+    this._nearbyLoadRequestId = requestId;
+    const activeRole = api.getActiveRole();
+    const isCurrentRequest = () => this._nearbyLoadRequestId === requestId && api.getActiveRole() === activeRole;
     this.setData({ loading: true, error: "", showList: false });
     try {
       await getApp().ensureAuth();
-      const type = api.getActiveRole() === "TEACHER" ? "TEACHING_NEED" : "TEACHER_OFFER";
+      const type = activeRole === "TEACHER" ? "TEACHING_NEED" : "TEACHER_OFFER";
       let location = null;
       try {
         location = await this.getLocation();
       } catch (locationError) {
+        const permissionState = await locationPermission.getLocationPermissionState(locationError);
         const result = await api.listAllJobs({ type });
-        const jobs = (result.items || []).map(api.normalizeJob);
+        const jobs = this.normalizeJobs(result);
+        const districts = this.buildDistricts(jobs);
+        if (!isCurrentRequest()) return false;
         this.setData({
           fallbackMode: true,
-          fallbackReason: "未获得定位权限，当前展示数据库中的全部已发布信息，不显示虚拟坐标。",
+          fallbackReason: permissionState.denied
+            ? "定位权限尚未开启，已切换为地区筛选与关键词搜索；不会使用虚拟坐标。"
+            : "暂时无法取得当前位置，已切换为地区筛选与关键词搜索；不会使用虚拟坐标。",
+          locationPermissionDenied: permissionState.denied,
+          districts,
+          districtIndex: 0,
           jobs,
           visibleJobs: jobs,
           selectedJob: jobs[0] || null,
           markers: [],
           loading: false
         });
-        return;
+        return true;
       }
       const result = await api.nearbyJobs({ latitude: location.latitude, longitude: location.longitude, radiusKm: 50, type });
-      const jobs = (result.items || []).map(api.normalizeJob);
+      const jobs = this.normalizeJobs(result);
+      const districts = this.buildDistricts(jobs);
+      if (!isCurrentRequest()) return false;
       this.setData({
         fallbackMode: false,
         fallbackReason: "",
+        locationPermissionDenied: false,
+        districts,
+        districtIndex: 0,
         latitude: location.latitude,
         longitude: location.longitude,
         jobs,
@@ -63,8 +82,11 @@ Page({
         markers: this.buildMarkers(jobs),
         loading: false
       });
+      return true;
     } catch (error) {
+      if (!isCurrentRequest()) return false;
       this.setData({ loading: false, error: error.message || "地图数据加载失败", jobs: [], visibleJobs: [], markers: [], selectedJob: null });
+      return false;
     }
   },
 
@@ -88,6 +110,24 @@ Page({
     }));
   },
 
+  normalizeJobs(response) {
+    const payload = response && response.data !== undefined ? response.data : response;
+    const items = Array.isArray(payload)
+      ? payload
+      : payload && Array.isArray(payload.items)
+        ? payload.items
+        : null;
+    if (!items) throw new Error("附近信息数据格式异常，请重新加载");
+    return items.map(api.normalizeJob).filter(Boolean);
+  },
+
+  buildDistricts(jobs) {
+    const values = (jobs || [])
+      .map((job) => String(job && job.district || "").trim())
+      .filter(Boolean);
+    return ["全部区域"].concat(Array.from(new Set(values)));
+  },
+
   retry() { this.loadNearby(); },
 
   handleSearch(event) {
@@ -96,6 +136,10 @@ Page({
 
   clearSearch() {
     this.setData({ query: "" }, () => this.filterJobs());
+  },
+
+  resetFilters() {
+    this.setData({ query: "", districtIndex: 0 }, () => this.filterJobs());
   },
 
   changeDistrict(event) {
@@ -131,6 +175,9 @@ Page({
 
   toggleList() { this.setData({ showList: !this.data.showList }); },
   resetLocation() { this.loadNearby(); },
+  openLocationSetting() {
+    locationPermission.openLocationSetting(() => this.loadNearby());
+  },
   openDetail(event) {
     const id = event && event.currentTarget.dataset.id ? event.currentTarget.dataset.id : this.data.selectedJob && this.data.selectedJob.id;
     if (id) wx.navigateTo({ url: `/pages/job-detail/job-detail?id=${id}` });

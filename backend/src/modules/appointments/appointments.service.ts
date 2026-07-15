@@ -193,13 +193,15 @@ export class AppointmentsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: { job: true, application: true }
+        where: { id: appointmentId }
       });
       if (!appointment) throw new NotFoundException("预约不存在");
+      const job = await tx.jobPost.findUnique({ where: { id: appointment.jobId } });
+      const application = await tx.application.findUnique({ where: { id: appointment.applicationId } });
+      if (!job || !application) throw new NotFoundException("预约关联信息不存在");
 
-      const isOwner = appointment.job.ownerId === actorId;
-      const isTeacher = appointment.application.teacherId === actorId;
+      const isOwner = job.ownerId === actorId;
+      const isTeacher = application.teacherId === actorId;
       if (!isOwner && !isTeacher) throw new ForbiddenException("无权处理该预约");
 
       let completionRole: RoleCode;
@@ -220,8 +222,7 @@ export class AppointmentsService {
         ? appointment.parentCompletedAt !== null
         : appointment.teacherCompletedAt !== null;
       if (alreadyAcknowledged) {
-        const { job: _job, application: _application, ...appointmentRecord } = appointment;
-        return appointmentRecord;
+        return appointment;
       }
       if (appointment.status !== AppointmentStatus.CONFIRMED) {
         throw new ConflictException("预约当前状态不允许确认完成");
@@ -256,8 +257,8 @@ export class AppointmentsService {
             appointmentId,
             jobId: appointment.jobId,
             applicationId: appointment.applicationId,
-            ownerId: appointment.job.ownerId,
-            teacherId: appointment.application.teacherId,
+            ownerId: job.ownerId,
+            teacherId: application.teacherId,
             actorId,
             completionRole,
             reason: normalized.normalizedReason
@@ -314,13 +315,15 @@ export class AppointmentsService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM appointments WHERE id = $1::uuid FOR UPDATE`, appointmentId);
       const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: { job: true, application: true }
+        where: { id: appointmentId }
       });
       if (!appointment) throw new NotFoundException("预约不存在");
+      const job = await tx.jobPost.findUnique({ where: { id: appointment.jobId } });
+      const application = await tx.application.findUnique({ where: { id: appointment.applicationId } });
+      if (!job || !application) throw new NotFoundException("预约关联信息不存在");
 
-      const isOwner = appointment.job.ownerId === actorId;
-      const isTeacher = appointment.application.teacherId === actorId;
+      const isOwner = job.ownerId === actorId;
+      const isTeacher = application.teacherId === actorId;
       if (!isOwner && !isTeacher) throw new ForbiddenException("无权处理该预约");
       if (command === "confirm" && !isTeacher) throw new ForbiddenException("只有报名教师可以确认预约");
       if (command === "confirm" && activeRole !== RoleCode.TEACHER) {
@@ -359,7 +362,7 @@ export class AppointmentsService {
         }
       });
 
-      if (nextStatus === AppointmentStatus.CANCELLED && appointment.application.status === ApplicationStatus.ACCEPTED) {
+      if (nextStatus === AppointmentStatus.CANCELLED && application.status === ApplicationStatus.ACCEPTED) {
         await tx.application.update({
           where: { id: appointment.applicationId },
           data: {
@@ -380,8 +383,8 @@ export class AppointmentsService {
             appointmentId,
             jobId: appointment.jobId,
             applicationId: appointment.applicationId,
-            ownerId: appointment.job.ownerId,
-            teacherId: appointment.application.teacherId,
+            ownerId: job.ownerId,
+            teacherId: application.teacherId,
             actorId,
             reason: normalized.normalizedReason
           }

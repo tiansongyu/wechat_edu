@@ -34,6 +34,38 @@ docker compose up -d --build
 
 `down -v` 会永久删除本地 PostgreSQL、Redis 和 MinIO 数据，只能用于明确需要重建的开发环境。
 
+### 收口本地测试数据
+
+自动化回归会产生大量账号与业务记录。需要把本地数据库收口为一套外键一致的样例时，先停止会写业务数据的容器，再使用数据库名进行二次确认：
+
+```bash
+docker compose build migrate
+docker compose stop api worker
+docker compose run --rm \
+  -e RESET_SAMPLE_DATA=true \
+  -e RESET_SAMPLE_DATABASE=tutor_link \
+  migrate npm run db:reset-sample
+docker compose start api worker
+```
+
+该命令会永久删除当前开发数据库中的账号和业务数据，然后创建一套关联的家长、老师、家教单、报名、双方已完成预约、评价、举报、会话、消息与通知样例，并立即执行数量和外键校验。脚本会拒绝在 `NODE_ENV=production` 下运行，也会拒绝未确认数据库名或未经额外确认的远程数据库。生产环境不得执行此命令。
+
+只读验证现有数据库是否恰好为这套样例：
+
+```bash
+docker compose run --rm migrate npm run db:verify-sample
+```
+
+### Docker 重启持久化验证
+
+以下测试不会删除或改写业务数据，但会依次重启本地 PostgreSQL、Redis、API 和 Worker。它只比较 PostgreSQL 核心业务状态的不可逆摘要，不输出用户资料内容：
+
+```bash
+RUN_DOCKER_PERSISTENCE_TEST=true npm --prefix backend run test:persistence
+```
+
+运行期间不要同时执行 E2E 或人工写入；若摘要在重启前后不同，测试会失败。此验证同时确认 Redis 不是业务事实来源，API/Worker 重启后仍从 PostgreSQL 恢复账号、资料、发布、报名、预约、评价、举报、会话与消息状态。
+
 ## 生产环境
 
 1. 准备 Linux 服务器、域名、Docker Engine 和 Compose Plugin。

@@ -93,7 +93,6 @@ export class ReviewGovernanceService {
   ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const normalized = this.normalizeReport(user.activeRole, dto);
-    await this.assertReportableReview(this.prisma, user, reviewId);
 
     const scope = `review-report:${reviewId}`;
     const cached = await this.prisma.idempotencyRecord.findUnique({
@@ -103,6 +102,7 @@ export class ReviewGovernanceService {
       this.assertMatchingRequest(cached.requestHash, normalized.requestHash);
       return cached.response;
     }
+    await this.assertReportableReview(this.prisma, user, reviewId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM reviews WHERE id = $1::uuid FOR UPDATE`, reviewId);
@@ -275,7 +275,7 @@ export class ReviewGovernanceService {
       throw new BadRequestException("举报处理结果无效");
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM review_reports WHERE id = $1::uuid FOR UPDATE`, reportId);
       const report = await tx.reviewReport.findUnique({
         where: { id: reportId },
@@ -392,8 +392,8 @@ export class ReviewGovernanceService {
         }
       });
 
-      return tx.reviewReport.findUniqueOrThrow({ where: { id: reportId }, select: ADMIN_REPORT_SELECT });
     });
+    return this.prisma.reviewReport.findUniqueOrThrow({ where: { id: reportId }, select: ADMIN_REPORT_SELECT });
   }
 
   private async changeReviewVisibility(
@@ -404,7 +404,7 @@ export class ReviewGovernanceService {
     dto: ChangeReviewVisibilityDto
   ) {
     const reason = this.normalizeModerationText(dto.reason, to === ReviewStatus.HIDDEN ? "隐藏原因" : "恢复原因");
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM reviews WHERE id = $1::uuid FOR UPDATE`, reviewId);
       const review = await tx.review.findUnique({
         where: { id: reviewId },
@@ -454,8 +454,8 @@ export class ReviewGovernanceService {
           payload: { reviewId, reason, version: review.version + 1 }
         }
       });
-      return tx.review.findUniqueOrThrow({ where: { id: reviewId }, select: ADMIN_REVIEW_SELECT });
     });
+    return this.prisma.review.findUniqueOrThrow({ where: { id: reviewId }, select: ADMIN_REVIEW_SELECT });
   }
 
   private async assertReportableReview(client: any, user: RequestUser, reviewId: string) {

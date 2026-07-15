@@ -1,16 +1,16 @@
 <view class="page-with-tabbar messages-page">
-  <view class="messages-header"><view><text class="messages-header__eyebrow">数据库实时同步</text><view class="messages-header__title-row"><text class="messages-header__title">消息中心</text><text class="messages-header__badge" wx:if="{{unreadCount}}">{{unreadCount}}</text></view></view><button class="messages-header__action" loading="{{markingAll}}" bindtap="markAllRead">全部已读</button></view>
+  <view class="messages-header"><view class="messages-header__main"><view class="messages-header__identity"><text class="messages-header__eyebrow">数据库实时同步</text><text class="messages-role messages-role--{{roleTone}}">{{roleLabel}}</text></view><view class="messages-header__title-row"><text class="messages-header__title">消息中心</text><text class="messages-header__badge" wx:if="{{unreadLabel}}">{{unreadLabel}}</text></view></view><button class="messages-header__action" loading="{{markingAll}}" disabled="{{markingAll}}" bindtap="markAllRead">全部已读</button></view>
   <view class="message-tools"><view class="message-tool"><view class="message-tool__icon message-tool__icon--blue">通</view><view><text class="message-tool__title">平台通知</text><text class="message-tool__copy">{{noticeCount}} 条</text></view></view><view class="message-tool"><view class="message-tool__icon message-tool__icon--purple">聊</view><view><text class="message-tool__title">沟通会话</text><text class="message-tool__copy">{{chatCount}} 个</text></view></view></view>
   <view class="message-tabs"><view wx:for="{{tabs}}" wx:key="key" class="message-tab {{currentTab === item.key ? 'message-tab--active' : ''}}" data-key="{{item.key}}" bindtap="switchTab">{{item.label}}</view></view>
+  <view class="messages-warning" wx:if="{{warning}}"><view class="messages-warning__icon">!</view><text>{{warning}}</text><text class="messages-warning__retry" bindtap="retry">重试</text></view>
   <view class="messages-state" wx:if="{{loading}}"><view class="messages-spinner"></view><text>正在加载消息...</text></view>
   <view class="messages-state" wx:elif="{{error}}"><text class="messages-state__title">加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
   <view class="message-list" wx:elif="{{visibleMessages.length}}">
     <view wx:for="{{visibleMessages}}" wx:key="id" class="message-card {{item.unread ? 'message-card--unread' : ''}}" data-id="{{item.id}}" bindtap="openMessage" hover-class="message-card--pressed">
       <image wx:if="{{item.avatarUrl}}" class="message-card__avatar message-card__avatar--image" src="{{item.avatarUrl}}" mode="aspectFill" /><view wx:else class="message-card__avatar message-card__avatar--{{item.tone}}">{{item.icon}}</view>
-      <view class="message-card__main"><view class="message-card__title-row"><text class="message-card__title">{{item.title}}</text><text class="message-card__time">{{item.time}}</text></view><text class="message-card__content">{{item.content}}</text></view>
-      <view class="message-card__dot" wx:if="{{item.unread}}">{{item.unreadNumber || ''}}</view>
+      <view class="message-card__main"><view class="message-card__title-row"><text class="message-card__title">{{item.title}}</text><view class="message-card__meta"><text class="message-card__time">{{item.time}}</text><text class="message-card__badge" wx:if="{{item.unreadLabel}}">{{item.unreadLabel}}</text></view></view><view class="message-card__preview"><text class="message-card__role message-card__role--{{item.roleTone}}" wx:if="{{item.type === 'chat'}}">{{item.roleLabel}}</text><text class="message-card__content">{{item.content}}</text></view></view>
     </view>
   </view>
-  <view class="messages-empty" wx:else><view class="messages-empty__icon">◌</view><text class="messages-empty__title">这里还没有消息</text><text class="messages-empty__copy">数据库中的申请进度和沟通会显示在这里</text></view>
+  <view class="messages-empty" wx:else><view class="messages-empty__icon">◌</view><text class="messages-empty__title">{{emptyTitle}}</text><text class="messages-empty__copy">{{emptyCopy}}</text></view>
   <view class="message-safety"><text class="message-safety__icon">✓</text><text>平台不会在聊天中索要转账或验证码，请注意识别风险。</text></view>
 </view>

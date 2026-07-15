@@ -111,7 +111,7 @@ describe("ReviewGovernanceService user report boundary", () => {
       category: ReviewReportCategory.HARASSMENT,
       description: "这是一段长度足够的举报情况详细说明"
     })).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.idempotencyRecord.findUnique).not.toHaveBeenCalled();
+    expect(prisma.idempotencyRecord.findUnique).toHaveBeenCalledTimes(1);
     expect(prisma.review.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         revieweeId: user.id,
@@ -158,11 +158,11 @@ describe("ReviewGovernanceService user report boundary", () => {
     }));
   });
 
-  it("returns the cached result for the same key and normalized content", async () => {
+  it("returns the cached result before rechecking a review that may now be removed", async () => {
     const { prisma, service } = setup();
     const description = "评价中包含未经允许公开的隐私信息";
     const cached = { ok: true };
-    prisma.review.findFirst.mockResolvedValue({ id: "review-id" });
+    prisma.review.findFirst.mockResolvedValue(null);
     prisma.idempotencyRecord.findUnique.mockResolvedValue({
       expiresAt: new Date(Date.now() + 60_000),
       requestHash: reportHash(RoleCode.PARENT, ReviewReportCategory.PRIVACY_LEAK, description),
@@ -173,6 +173,7 @@ describe("ReviewGovernanceService user report boundary", () => {
       category: ReviewReportCategory.PRIVACY_LEAK,
       description: ` ${description} `
     })).resolves.toBe(cached);
+    expect(prisma.review.findFirst).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

@@ -1,13 +1,72 @@
 const api = require("../../utils/api");
+const locationPermission = require("../../utils/location-permission");
 const DEFAULT_REGION = ["广东省", "深圳市", "南山区"];
 
 const APPLICATION_STATUS = { PENDING: "待处理", ACCEPTED: "已录用", REJECTED: "未选中", CANCELLED: "已取消" };
 const APPOINTMENT_STATUS = { PENDING: "待确认", CONFIRMED: "已确认", COMPLETED: "已完成", CANCELLED: "已取消", DISPUTED: "有争议" };
 
+function unwrapPayload(response) {
+  let payload = response;
+  for (let depth = 0; depth < 2; depth += 1) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.data === undefined) break;
+    payload = payload.data;
+  }
+  return payload;
+}
+
+function normalizeCollection(response, label) {
+  const payload = unwrapPayload(response);
+  if (Array.isArray(payload)) return payload.filter((item) => item && typeof item === "object");
+  if (payload && typeof payload === "object") {
+    for (const key of ["items", "list", "results"]) {
+      if (Array.isArray(payload[key])) {
+        return payload[key].filter((item) => item && typeof item === "object");
+      }
+    }
+  }
+  throw new Error(`${label}数据格式异常`);
+}
+
+function normalizeObject(response, label) {
+  const payload = unwrapPayload(response);
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload;
+  throw new Error(`${label}数据格式异常`);
+}
+
+function settleCollection(promise, label) {
+  return Promise.resolve(promise)
+    .then((response) => ({ value: normalizeCollection(response, label), error: null, label }))
+    .catch((error) => ({ value: [], error, label }));
+}
+
+function settleObject(promise, label, fallback) {
+  return Promise.resolve(promise)
+    .then((response) => ({ value: normalizeObject(response, label), error: null, label }))
+    .catch((error) => ({ value: fallback, error, label }));
+}
+
+function settleReviews(promise) {
+  const fallback = {
+    unavailable: true,
+    items: [],
+    summary: { displayAverage: null, count: 0, levelLabel: "评价积累中" }
+  };
+  return Promise.resolve(promise)
+    .then((response) => {
+      const payload = normalizeObject(response, "合作评价");
+      if (!Array.isArray(payload.items) || !payload.summary || typeof payload.summary !== "object" || Array.isArray(payload.summary)) {
+        throw new Error("合作评价数据格式异常");
+      }
+      return { value: payload, error: null, label: "合作评价" };
+    })
+    .catch((error) => ({ value: fallback, error, label: "合作评价" }));
+}
+
 Page({
   data: {
     loading: true,
     error: "",
+    warning: "",
     actionId: "",
     rolePromptOpen: false,
     account: null,
@@ -50,24 +109,32 @@ Page({
   },
 
   async loadData(showLoading = true) {
-    if (showLoading) this.setData({ loading: true, error: "" });
+    this.setData({ ...(showLoading ? { loading: true } : {}), error: "", warning: "" });
     try {
       await getApp().ensureAuth();
       const account = await api.getAccount();
       const activeRole = account.activeRole || api.getActiveRole();
       const roleApplications = activeRole === "TEACHER" ? api.listTeacherApplications() : api.listAllParentApplications();
-      const [rawPosts, rawFavorites, rawApplications, preferences, rawAppointments, receivedReviews] = await Promise.all([
-        api.getMineJobs(),
-        api.listFavoriteJobs(),
-        roleApplications,
-        api.getPreferences(),
-        api.listAppointments(),
-        api.listMyReceivedReviews({ limit: 3 }).catch(() => ({
-          unavailable: true,
-          items: [],
-          summary: { displayAverage: null, count: 0, levelLabel: "评价积累中" }
-        }))
+      const [postsResult, favoritesResult, applicationsResult, preferencesResult, appointmentsResult, reviewsResult] = await Promise.all([
+        settleCollection(api.getMineJobs(), "我的发布"),
+        settleCollection(api.listFavoriteJobs(), "我的收藏"),
+        settleCollection(roleApplications, "报名动态"),
+        settleObject(api.getPreferences(), "偏好设置", this.data.settings),
+        settleCollection(api.listAppointments(), "预约记录"),
+        settleReviews(api.listMyReceivedReviews({ limit: 3 }))
       ]);
+      const warningLabels = [postsResult, favoritesResult, applicationsResult, preferencesResult, appointmentsResult, reviewsResult]
+        .filter((result) => result.error)
+        .map((result) => result.label);
+      const warning = warningLabels.length
+        ? `部分数据暂未同步：${warningLabels.join("、")}。其他功能仍可正常使用。`
+        : "";
+      const rawPosts = postsResult.value;
+      const rawFavorites = favoritesResult.value;
+      const rawApplications = applicationsResult.value;
+      const preferences = preferencesResult.value;
+      const rawAppointments = appointmentsResult.value;
+      const receivedReviews = reviewsResult.value;
       const expectedPostType = activeRole === "TEACHER" ? "TEACHER_OFFER" : "TEACHING_NEED";
       const posts = rawPosts
         .filter((item) => item.type === expectedPostType)
@@ -126,6 +193,7 @@ Page({
         favorites,
         posts,
         appointments,
+        warning,
         settings: { ...this.data.settings, ...(preferences || {}) },
         parentRegion: [parentProfile.province || "广东省", parentProfile.city || "深圳市", parentProfile.district || "南山区"],
         parentForm: {
@@ -143,7 +211,7 @@ Page({
       getApp().globalData.activeRole = activeRole;
       return true;
     } catch (error) {
-      this.setData({ loading: false, error: error.message || "个人中心加载失败", visibleItems: [] });
+      this.setData({ loading: false, error: error.message || "个人中心加载失败", warning: "", visibleItems: [] });
       return false;
     }
   },
@@ -420,8 +488,7 @@ Page({
         });
       },
       fail: (error) => {
-        if (error && /cancel/i.test(error.errMsg || "")) return;
-        wx.showToast({ title: "未能选择地址，请检查定位权限", icon: "none" });
+        locationPermission.handleChooseLocationFailure(error, () => this.chooseParentLocation());
       }
     });
   },

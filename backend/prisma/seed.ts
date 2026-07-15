@@ -9,6 +9,9 @@ import {
   JobStatus,
   JobType,
   NotificationType,
+  ReviewReportCategory,
+  ReviewReportStatus,
+  ReviewStatus,
   RoleCode
 } from "../src/generated/prisma/enums";
 
@@ -26,6 +29,9 @@ const CONVERSATION_ID = "018f1ef0-0000-7000-8000-000000000401";
 const MESSAGE_ID = "018f1ef0-0000-7000-8000-000000000501";
 const NOTIFICATION_ID = "018f1ef0-0000-7000-8000-000000000601";
 const AUDIT_ID = "018f1ef0-0000-7000-8000-000000000701";
+const REVIEW_ID = "018f1ef0-0000-7000-8000-000000000801";
+const REVIEW_REPORT_ID = "018f1ef0-0000-7000-8000-000000000901";
+const CONVERSATION_CONTEXT_KEY = `job:${JOB_ID}:parent:${PARENT_ID}:teacher:${TEACHER_ID}`;
 
 async function main() {
   await Promise.all([
@@ -39,6 +45,7 @@ async function main() {
     where: { OR: [{ id: ADMIN_ID }, { username: adminUsername }] },
     select: { id: true }
   });
+  const adminId = existingAdmin?.id || ADMIN_ID;
   if (!existingAdmin) {
     const adminPassword = await argon2.hash(process.env.ADMIN_PASSWORD || "Admin123456!", { type: argon2.argon2id });
     await prisma.account.create({
@@ -59,6 +66,7 @@ async function main() {
   }
 
   if (process.env.SEED_DEMO_DATA === "true") {
+    const sampleCompletedAt = new Date("2026-07-15T08:00:00.000Z");
     await prisma.account.upsert({
       where: { id: PARENT_ID },
       update: {},
@@ -163,9 +171,42 @@ async function main() {
         id: APPOINTMENT_ID,
         jobId: JOB_ID,
         applicationId: APPLICATION_ID,
-        status: AppointmentStatus.CONFIRMED,
+        status: AppointmentStatus.COMPLETED,
         note: "系统保留的一条合作预约样本。",
-        handledAt: new Date()
+        statusNote: "样本数据：双方已确认完成",
+        parentCompletedAt: sampleCompletedAt,
+        teacherCompletedAt: sampleCompletedAt,
+        completedAt: sampleCompletedAt,
+        handledAt: sampleCompletedAt
+      }
+    });
+    await prisma.review.upsert({
+      where: { appointmentId_reviewerId: { appointmentId: APPOINTMENT_ID, reviewerId: PARENT_ID } },
+      update: {},
+      create: {
+        id: REVIEW_ID,
+        appointmentId: APPOINTMENT_ID,
+        reviewerId: PARENT_ID,
+        revieweeId: TEACHER_ID,
+        reviewerRole: RoleCode.PARENT,
+        revieweeRole: RoleCode.TEACHER,
+        rating: 5,
+        tags: ["专业耐心", "准时守约"],
+        content: "讲解清晰耐心，孩子很容易理解。",
+        status: ReviewStatus.PUBLISHED
+      }
+    });
+    await prisma.reviewReport.upsert({
+      where: { reviewId_reporterId: { reviewId: REVIEW_ID, reporterId: TEACHER_ID } },
+      update: {},
+      create: {
+        id: REVIEW_REPORT_ID,
+        reviewId: REVIEW_ID,
+        reporterId: TEACHER_ID,
+        reporterRole: RoleCode.TEACHER,
+        category: ReviewReportCategory.OTHER,
+        description: "样例举报用于验证后台治理流程，请勿作为真实投诉处理。",
+        status: ReviewReportStatus.OPEN
       }
     });
     await prisma.favorite.upsert({
@@ -173,12 +214,19 @@ async function main() {
       update: {},
       create: { accountId: TEACHER_ID, jobId: JOB_ID }
     });
-    await prisma.conversation.upsert({ where: { id: CONVERSATION_ID }, update: {}, create: { id: CONVERSATION_ID } });
-    for (const accountId of [PARENT_ID, TEACHER_ID]) {
+    await prisma.conversation.upsert({
+      where: { id: CONVERSATION_ID },
+      update: { jobId: JOB_ID, contextKey: CONVERSATION_CONTEXT_KEY },
+      create: { id: CONVERSATION_ID, jobId: JOB_ID, contextKey: CONVERSATION_CONTEXT_KEY }
+    });
+    for (const member of [
+      { accountId: PARENT_ID, role: RoleCode.PARENT },
+      { accountId: TEACHER_ID, role: RoleCode.TEACHER }
+    ]) {
       await prisma.conversationMember.upsert({
-        where: { conversationId_accountId: { conversationId: CONVERSATION_ID, accountId } },
-        update: {},
-        create: { conversationId: CONVERSATION_ID, accountId, lastReadAt: new Date() }
+        where: { conversationId_accountId: { conversationId: CONVERSATION_ID, accountId: member.accountId } },
+        update: { role: member.role },
+        create: { conversationId: CONVERSATION_ID, accountId: member.accountId, role: member.role, lastReadAt: new Date() }
       });
     }
     await prisma.message.upsert({
@@ -209,7 +257,7 @@ async function main() {
       update: {},
       create: {
         id: AUDIT_ID,
-        actorId: ADMIN_ID,
+        actorId: adminId,
         action: "sample.retained",
         targetType: "System",
         targetId: JOB_ID,

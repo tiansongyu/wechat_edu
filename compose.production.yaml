@@ -25,6 +25,7 @@ services:
   worker:
     environment:
       NODE_ENV: production
+      WECHAT_LOGIN_MOCK: "false"
       SEED_DEMO_DATA: "false"
     deploy:
       resources:

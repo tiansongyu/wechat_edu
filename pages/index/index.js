@@ -286,9 +286,17 @@ Page({
       confirmColor: "#3478f6",
       success: async ({ confirm }) => {
         if (!confirm || this.data.actionId) return;
+        const signature = `${id}:job-apply:`;
+        if (!this._pendingApply || this._pendingApply.signature !== signature) {
+          this._pendingApply = {
+            signature,
+            key: api.createCommandKey("job-apply", id)
+          };
+        }
         this.setData({ actionId: id });
         try {
-          await api.applyJob(id);
+          await api.applyJob(id, "", this._pendingApply.key);
+          this._pendingApply = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已提交", icon: "success" });
         } catch (error) {

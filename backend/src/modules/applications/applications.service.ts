@@ -55,28 +55,45 @@ export class ApplicationsService {
   }
 
   async apply(teacherId: string, jobId: string, idempotencyKey: string, dto: ApplyJobDto) {
-    if (!idempotencyKey || idempotencyKey.length > 128) {
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 128) {
       throw new BadRequestException("缺少有效的 Idempotency-Key 请求头");
     }
+    const coverLetter = dto.coverLetter?.trim() || "";
+    const requestHash = createHash("sha256")
+      .update(JSON.stringify({ command: "apply", coverLetter }))
+      .digest("hex");
     const scope = `apply:${jobId}`;
     const cached = await this.prisma.idempotencyRecord.findUnique({
-      where: { actorId_scope_key: { actorId: teacherId, scope, key: idempotencyKey } }
+      where: { actorId_scope_key: { actorId: teacherId, scope, key } }
     });
-    if (cached && cached.expiresAt > new Date()) return cached.response;
+    if (cached && cached.expiresAt > new Date()) {
+      if (cached.requestHash !== requestHash) {
+        throw new ConflictException("Idempotency-Key 已用于不同的报名内容");
+      }
+      return cached.response;
+    }
 
     return this.retrySerializable(() => this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(`SELECT id FROM job_posts WHERE id = $1::uuid FOR UPDATE`, jobId);
       const existingKey = await tx.idempotencyRecord.findUnique({
-        where: { actorId_scope_key: { actorId: teacherId, scope, key: idempotencyKey } }
+        where: { actorId_scope_key: { actorId: teacherId, scope, key } }
       });
-      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) return existingKey.response;
+      if (existingKey?.expiresAt && existingKey.expiresAt > new Date()) {
+        if (existingKey.requestHash !== requestHash) {
+          throw new ConflictException("Idempotency-Key 已用于不同的报名内容");
+        }
+        return existingKey.response;
+      }
       if (existingKey) await tx.idempotencyRecord.delete({ where: { id: existingKey.id } });
 
-      const [job, teacher, existingApplication] = await Promise.all([
-        tx.jobPost.findUnique({ where: { id: jobId } }),
-        tx.teacherProfile.findUnique({ where: { accountId: teacherId } }),
-        tx.application.findUnique({ where: { jobId_teacherId: { jobId, teacherId } } })
-      ]);
+      // The transaction uses one PostgreSQL connection; avoid concurrent
+      // client.query calls that pg has deprecated for removal in pg 9.
+      const job = await tx.jobPost.findUnique({ where: { id: jobId } });
+      const teacher = await tx.teacherProfile.findUnique({ where: { accountId: teacherId } });
+      const existingApplication = await tx.application.findUnique({
+        where: { jobId_teacherId: { jobId, teacherId } }
+      });
       if (!job) throw new NotFoundException("家教需求不存在");
       if (job.type !== JobType.TEACHING_NEED || job.status !== JobStatus.PUBLISHED) {
         throw new ConflictException("该需求当前不可报名");
@@ -93,14 +110,14 @@ export class ApplicationsService {
         ? await tx.application.update({
             where: { id: existingApplication.id },
             data: {
-              coverLetter: dto.coverLetter,
+              coverLetter,
               status: ApplicationStatus.PENDING,
               statusNote: null,
               handledAt: null,
               version: { increment: 1 }
             }
           })
-        : await tx.application.create({ data: { jobId, teacherId, coverLetter: dto.coverLetter } });
+        : await tx.application.create({ data: { jobId, teacherId, coverLetter } });
       if (!existingApplication) {
         await tx.jobPost.update({ where: { id: jobId }, data: { applicationCount: { increment: 1 } } });
       }
@@ -122,7 +139,8 @@ export class ApplicationsService {
         data: {
           actorId: teacherId,
           scope,
-          key: idempotencyKey,
+          key,
+          requestHash,
           response,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }

@@ -167,9 +167,17 @@ Page({
       confirmColor: "#3478f6",
       success: async ({ confirm }) => {
         if (!confirm || this.data.action) return;
+        const signature = `${this.data.job.id}:job-apply:`;
+        if (!this._pendingApply || this._pendingApply.signature !== signature) {
+          this._pendingApply = {
+            signature,
+            key: api.createCommandKey("job-apply", this.data.job.id)
+          };
+        }
         this.setData({ action: "apply" });
         try {
-          await api.applyJob(this.data.job.id);
+          await api.applyJob(this.data.job.id, "", this._pendingApply.key);
+          this._pendingApply = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已提交", icon: "success" });
         } catch (error) {
