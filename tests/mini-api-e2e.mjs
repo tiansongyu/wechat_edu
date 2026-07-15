@@ -32,6 +32,7 @@ const expectedEndpoints = [
   "POST /api/v1/conversations",
   "GET /api/v1/conversations/:id/messages",
   "POST /api/v1/conversations/:id/messages",
+  "POST /api/v1/conversations/:id/read",
   "POST /api/v1/files/upload-url"
 ];
 
@@ -371,10 +372,16 @@ const messages = await mini(
   { token: teacher.accessToken }
 );
 assert.ok(messages.items.some((item) => item.id === firstMessage.id));
+const readConversation = await mini(
+  "POST /api/v1/conversations/:id/read",
+  `/api/v1/conversations/${conversation.id}/read`,
+  { method: "POST", token: teacher.accessToken, body: {} }
+);
+assert.equal(readConversation.success, true);
 const conversations = await mini("GET /api/v1/conversations", "/api/v1/conversations", {
   token: teacher.accessToken
 });
-assert.ok(conversations.some((item) => item.id === conversation.id));
+assert.equal(conversations.find((item) => item.id === conversation.id)?.unreadCount, 0);
 
 let notifications = [];
 for (let attempt = 0; attempt < 30; attempt += 1) {

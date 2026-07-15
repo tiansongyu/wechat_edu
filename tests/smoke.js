@@ -10,11 +10,15 @@ global.getApp = () => ({
   ensureAuth: async () => ({ id: "test-account", activeRole: "PARENT" })
 });
 global.getCurrentPages = () => [{ route: "pages/index/index" }];
+const capturedRequests = [];
 global.wx = {
   getStorageSync(key) { return storage.has(key) ? storage.get(key) : ""; },
   setStorageSync(key, value) { storage.set(key, value); },
   removeStorageSync(key) { storage.delete(key); },
-  request() {},
+  request(options) {
+    capturedRequests.push(options);
+    options.success({ statusCode: 200, data: { success: true } });
+  },
   login() {},
   showToast() {},
   showModal() {},
@@ -75,4 +79,14 @@ for (const file of [...pageFiles, "app.js", "utils/api.js", "utils/request.js"])
   assert.doesNotMatch(source, /utils\/(data|store)|require\([^)]*(?:data|store)/, `${file} must use database APIs`);
 }
 
-console.log("Smoke checks passed: database-only client flows, 9 pages, stable session identity, and native tab bar.");
+requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-000000000000/read", { method: "POST" })
+  .then(() => {
+    assert.equal(capturedRequests.length, 1);
+    assert.equal(capturedRequests[0].method, "POST");
+    assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
+    console.log("Smoke checks passed: database-only client flows, valid empty JSON writes, 9 pages, stable session identity, and native tab bar.");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

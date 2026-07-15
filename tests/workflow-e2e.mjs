@@ -622,7 +622,7 @@ assert.ok(messages.items.some((item) => item.id === message.id));
 const readConversation = await request(
   "POST /api/v1/conversations/:id/read",
   `/api/v1/conversations/${conversation.id}/read`,
-  { method: "POST", token: teacherA.accessToken }
+  { method: "POST", token: teacherA.accessToken, body: {} }
 );
 assert.equal(readConversation.success, true);
 const conversations = await request("GET /api/v1/conversations", "/api/v1/conversations", {
