@@ -78,6 +78,8 @@ model Account {
   phoneEncrypted  String?              @db.Text
   phoneHash       String?              @db.VarChar(128)
   status          AccountStatus        @default(ACTIVE)
+  lastLoginAt     DateTime?            @db.Timestamptz(3)
+  loginCount      Int                  @default(0)
   createdAt       DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime             @updatedAt @db.Timestamptz(3)
   roles           AccountRole[]
@@ -120,9 +122,12 @@ model AccountRole {
 
 model ParentProfile {
   accountId String   @id @db.Uuid
+  province  String?  @db.VarChar(64)
   city      String?  @db.VarChar(64)
   district  String?  @db.VarChar(64)
   address   String?  @db.VarChar(255)
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
@@ -176,6 +181,8 @@ model JobPost {
   ownerId          String                                 @db.Uuid
   type             JobType
   title            String                                 @db.VarChar(120)
+  province         String?                                @db.VarChar(64)
+  city             String?                                @db.VarChar(64)
   district         String                                 @db.VarChar(64)
   area             String?                                @db.VarChar(128)
   grade            String                                 @db.VarChar(64)
@@ -333,6 +340,7 @@ model RefreshSession {
   tokenHash String    @db.VarChar(128)
   userAgent String?   @db.VarChar(500)
   ipAddress String?   @db.VarChar(64)
+  deviceIdHash String? @db.VarChar(128)
   expiresAt DateTime  @db.Timestamptz(3)
   revokedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)

@@ -1,4 +1,5 @@
-import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsInt, IsLatitude, IsLongitude, IsOptional, IsString, IsUrl, Matches, Max, MaxLength, Min } from "class-validator";
 
 export class UpdateTeacherProfileDto {
   @IsOptional() @IsString() @MaxLength(64) realName?: string;
@@ -14,9 +15,12 @@ export class UpdateTeacherProfileDto {
 }
 
 export class UpdateParentProfileDto {
+  @IsOptional() @IsString() @MaxLength(64) province?: string;
   @IsOptional() @IsString() @MaxLength(64) city?: string;
   @IsOptional() @IsString() @MaxLength(64) district?: string;
   @IsOptional() @IsString() @MaxLength(255) address?: string;
+  @IsOptional() @Type(() => Number) @IsLatitude() latitude?: number;
+  @IsOptional() @Type(() => Number) @IsLongitude() longitude?: number;
 }
 
 export class AddCertificationDto {

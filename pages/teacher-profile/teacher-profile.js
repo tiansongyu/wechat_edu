@@ -8,7 +8,8 @@ Page({
     profile: null,
     auditStatusLabel: "尚未提交审核",
     auditStatusTone: "UNSUBMITTED",
-    form: { realName: "", school: "", major: "", education: "", teachingYears: "0", hourlyRate: "", subjects: "", serviceDistricts: "", bio: "" },
+    serviceRegionValue: ["广东省", "深圳市", "南山区"],
+    form: { realName: "", school: "", major: "", education: "", teachingYears: "0", hourlyRate: "", subjects: "", serviceDistricts: [], bio: "" },
     certifications: []
   },
 
@@ -35,7 +36,7 @@ Page({
           teachingYears: String(profile.teachingYears || 0),
           hourlyRate: profile.hourlyRateCents ? String(profile.hourlyRateCents / 100) : "",
           subjects: (profile.subjects || []).join("、"),
-          serviceDistricts: (profile.serviceDistricts || []).join("、"),
+          serviceDistricts: profile.serviceDistricts || [],
           bio: profile.bio || ""
         }
       });
@@ -49,6 +50,21 @@ Page({
   retry() { this.loadProfile(); },
   handleInput(event) { this.setData({ [`form.${event.currentTarget.dataset.field}`]: event.detail.value }); },
   splitList(value) { return String(value || "").split(/[、,，\s]+/).map((item) => item.trim()).filter(Boolean); },
+
+  addServiceRegion(event) {
+    const selected = event.detail.value || [];
+    const label = selected.join(" / ");
+    const serviceDistricts = this.data.form.serviceDistricts.slice();
+    if (label && !serviceDistricts.includes(label)) serviceDistricts.push(label);
+    this.setData({ serviceRegionValue: selected, "form.serviceDistricts": serviceDistricts });
+  },
+
+  removeServiceRegion(event) {
+    const target = event.currentTarget.dataset.region;
+    this.setData({
+      "form.serviceDistricts": this.data.form.serviceDistricts.filter((item) => item !== target)
+    });
+  },
 
   async saveProfile() {
     const { form, profile } = this.data;
@@ -72,7 +88,7 @@ Page({
         teachingYears,
         hourlyRateCents: form.hourlyRate ? Math.round(hourlyRate * 100) : undefined,
         subjects: this.splitList(form.subjects),
-        serviceDistricts: this.splitList(form.serviceDistricts),
+        serviceDistricts: form.serviceDistricts.slice(),
         bio: form.bio.trim(),
         version: profile.version
       });

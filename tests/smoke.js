@@ -53,6 +53,17 @@ assert.deepEqual(appConfig.pages, [
 ]);
 assert.equal(appConfig.tabBar.custom, true);
 assert.equal(appConfig.requiredPrivateInfos.includes("getLocation"), true);
+assert.equal(appConfig.requiredPrivateInfos.includes("chooseLocation"), true);
+
+const publishTemplate = fs.readFileSync(path.join(root, "pages/publish/publish.wxml"), "utf8");
+const profileTemplate = fs.readFileSync(path.join(root, "pages/profile/profile.wxml"), "utf8");
+const teacherTemplate = fs.readFileSync(path.join(root, "pages/teacher-profile/teacher-profile.wxml"), "utf8");
+assert.match(publishTemplate, /picker[^>]+mode="region"/);
+assert.doesNotMatch(publishTemplate, /data-field="address"/);
+assert.match(profileTemplate, /picker[^>]+mode="region"/);
+assert.doesNotMatch(profileTemplate, /data-field="(?:city|district|address)"/);
+assert.match(teacherTemplate, /picker[^>]+mode="region"/);
+assert.doesNotMatch(teacherTemplate, /data-field="serviceDistricts"/);
 
 const pageFiles = appConfig.pages.map((page) => `${page}.js`);
 const pages = pageFiles.map((file) => loadDefinition(file, "Page"));

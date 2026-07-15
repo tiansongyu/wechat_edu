@@ -23,6 +23,8 @@ export class NearbyJobsDto extends ListJobsDto {
 export class CreateJobDto {
   @IsEnum(JobType) type: JobType;
   @IsString() @Matches(/\S/) @MaxLength(120) title: string;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) province?: string;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) city?: string;
   @IsString() @Matches(/\S/) @MaxLength(64) district: string;
   @IsOptional() @IsString() @MaxLength(128) area?: string;
   @IsString() @Matches(/\S/) @MaxLength(64) grade: string;
@@ -42,6 +44,8 @@ export class CreateJobDto {
 
 export class UpdateJobDto {
   @IsOptional() @IsString() @Matches(/\S/) @MaxLength(120) title?: string;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) province?: string;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) city?: string;
   @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) district?: string;
   @IsOptional() @IsString() @MaxLength(128) area?: string;
   @IsOptional() @IsString() @Matches(/\S/) @MaxLength(64) grade?: string;

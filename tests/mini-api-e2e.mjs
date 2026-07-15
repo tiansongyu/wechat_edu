@@ -88,6 +88,8 @@ function jobPayload(runId, suffix) {
   return {
     type: "TEACHING_NEED",
     title: `全接口测试${suffix} ${runId}`,
+    province: "广东省",
+    city: "深圳市",
     district: "南山区",
     area: "科技园",
     grade: "高一",
@@ -155,7 +157,14 @@ parent.accessToken = parentAgain.accessToken;
 const parentProfile = await mini("PATCH /api/v1/profiles/parent", "/api/v1/profiles/parent", {
   method: "PATCH",
   token: parent.accessToken,
-  body: { city: "深圳", district: "南山区", address: "科技园" }
+  body: {
+    province: "广东省",
+    city: "深圳市",
+    district: "南山区",
+    address: "深圳市南山区科技园",
+    latitude: 22.54042,
+    longitude: 113.93457
+  }
 });
 assert.equal(parentProfile.district, "南山区");
 

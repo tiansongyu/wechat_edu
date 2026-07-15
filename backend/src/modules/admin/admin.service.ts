@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { AccountStatus, ApplicationStatus, AppointmentStatus, AuditStatus, JobStatus, RoleCode } from "../../generated/prisma/enums";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
@@ -13,7 +14,7 @@ import {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   async dashboard() {
     const [users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingApplications, recentJobs] =
@@ -32,7 +33,13 @@ export class AdminService {
       ]);
     return {
       metrics: { users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingApplications },
-      jobStatusDistribution: recentJobs.map((item) => ({ status: item.status, count: item._count._all }))
+      jobStatusDistribution: recentJobs.map((item) => ({ status: item.status, count: item._count._all })),
+      integrations: {
+        wechatLogin: this.config.get<string>("WECHAT_LOGIN_MOCK") === "true" ? "MOCK" : "LIVE",
+        wechatConfigured: Boolean(
+          this.config.get<string>("WECHAT_APP_ID") && this.config.get<string>("WECHAT_APP_SECRET")
+        )
+      }
     };
   }
 
@@ -51,7 +58,10 @@ export class AdminService {
           nickname: true,
           avatarUrl: true,
           username: true,
+          openid: true,
           status: true,
+          lastLoginAt: true,
+          loginCount: true,
           createdAt: true,
           roles: { select: { roleCode: true } },
           teacherProfile: { select: { auditStatus: true, score: true } }
@@ -62,7 +72,15 @@ export class AdminService {
       }),
       this.prisma.account.count({ where })
     ]);
-    return { items, total, page: query.page, pageSize: query.pageSize };
+    return {
+      items: items.map(({ openid, ...item }) => ({
+        ...item,
+        loginProvider: item.username ? "ADMIN" : openid ? "WECHAT" : "UNKNOWN"
+      })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize
+    };
   }
 
   async updateUserStatus(actorId: string, accountId: string, dto: UpdateAccountStatusDto) {

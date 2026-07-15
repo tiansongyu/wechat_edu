@@ -26,7 +26,7 @@
         <view class="cert-field"><text>参考课酬</text><input value="{{form.hourlyRate}}" type="number" data-field="hourlyRate" placeholder="元/小时" bindinput="handleInput" /></view>
       </view>
       <view class="cert-field"><text>擅长科目 *</text><input value="{{form.subjects}}" data-field="subjects" placeholder="数学、物理（用顿号分隔）" bindinput="handleInput" /></view>
-      <view class="cert-field"><text>服务区域</text><input value="{{form.serviceDistricts}}" data-field="serviceDistricts" placeholder="南山区、福田区" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>服务区域</text><picker mode="region" value="{{serviceRegionValue}}" bindchange="addServiceRegion"><view class="service-region-picker">＋ 使用省市区滚动控件添加服务区域</view></picker><view class="service-region-list"><view class="service-region-tag" wx:for="{{form.serviceDistricts}}" wx:key="*this"><text>{{item}}</text><text data-region="{{item}}" bindtap="removeServiceRegion">×</text></view><text class="service-region-empty" wx:if="{{!form.serviceDistricts.length}}">尚未选择服务区域</text></view></view>
       <view class="cert-field"><text>个人简介</text><textarea value="{{form.bio}}" data-field="bio" maxlength="500" placeholder="介绍教学经验和教学方法" bindinput="handleInput"></textarea></view>
     </view>
 

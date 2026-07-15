@@ -23,7 +23,9 @@ export class JobsService {
           OR: [
             { title: { contains: query.keyword, mode: "insensitive" as const } },
             { description: { contains: query.keyword, mode: "insensitive" as const } },
-            { area: { contains: query.keyword, mode: "insensitive" as const } }
+            { area: { contains: query.keyword, mode: "insensitive" as const } },
+            { city: { contains: query.keyword, mode: "insensitive" as const } },
+            { district: { contains: query.keyword, mode: "insensitive" as const } }
           ]
         } : {})
       },
@@ -84,7 +86,7 @@ export class JobsService {
       `WITH origin AS (
          SELECT ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography AS point
        ), candidates AS (
-         SELECT j.id, j."type", j.title, j.district, j.area, j.grade, j.subject,
+         SELECT j.id, j."type", j.title, j.province, j.city, j.district, j.area, j.grade, j.subject,
                 j."priceCents", j."priceUnit", j.settlement, j.schedule, j.description,
                 j.address, j."studentInfo", j."publishedAt", j.latitude, j.longitude,
                 owner.id AS "ownerId", owner.nickname AS "ownerNickname", owner."avatarUrl" AS "ownerAvatarUrl",
@@ -239,9 +241,12 @@ export class JobsService {
     }
     const district = this.requiredText(dto.district, "授课区域");
     const online = district === "线上";
+    const province = online ? null : this.requiredText(dto.province || "", "省份");
+    const city = online ? null : this.requiredText(dto.city || "", "城市");
     if (!online && (dto.latitude === undefined || dto.longitude === undefined)) {
       throw new BadRequestException("线下授课必须提供完整经纬度");
     }
+    if (!online && !dto.address?.trim()) throw new BadRequestException("线下授课必须通过地图选择详细地点");
     const latitude = online ? null : dto.latitude;
     const longitude = online ? null : dto.longitude;
     const contact = this.normalizeContact(dto.contact);
@@ -251,6 +256,8 @@ export class JobsService {
           ownerId: user.id,
           type: dto.type,
           title: this.requiredText(dto.title, "标题"),
+          province,
+          city,
           district,
           area: this.nullableText(dto.area),
           grade: this.requiredText(dto.grade, "年级"),
@@ -292,6 +299,23 @@ export class JobsService {
       this.assertActiveRole(user, before.type);
       const district = dto.district === undefined ? before.district.trim() : this.requiredText(dto.district, "授课区域");
       const online = district === "线上";
+      const province = online
+        ? null
+        : dto.province === undefined
+          ? before.province
+          : this.requiredText(dto.province, "省份");
+      const city = online
+        ? null
+        : dto.city === undefined
+          ? before.city
+          : this.requiredText(dto.city, "城市");
+      const address = online
+        ? null
+        : dto.address === undefined
+          ? before.address
+          : this.nullableText(dto.address);
+      if (!online && (!province?.trim() || !city?.trim())) throw new BadRequestException("请选择完整省市区");
+      if (!online && !address?.trim()) throw new BadRequestException("线下授课必须通过地图选择详细地点");
       const coordinatePairProvided = dto.latitude !== undefined || dto.longitude !== undefined;
       if (!online && coordinatePairProvided && (dto.latitude === undefined || dto.longitude === undefined)) {
         throw new BadRequestException("经纬度必须同时提供");
@@ -306,6 +330,8 @@ export class JobsService {
         where: { id, ownerId: user.id, version, status: { in: [JobStatus.DRAFT, JobStatus.PENDING, JobStatus.REJECTED] } },
         data: {
           title: dto.title === undefined ? undefined : this.requiredText(dto.title, "标题"),
+          province,
+          city,
           district,
           area: dto.area === undefined ? undefined : this.nullableText(dto.area),
           grade: dto.grade === undefined ? undefined : this.requiredText(dto.grade, "年级"),
@@ -316,7 +342,7 @@ export class JobsService {
           schedule: dto.schedule === undefined ? undefined : this.requiredText(dto.schedule, "授课时间"),
           description: dto.description === undefined ? undefined : this.requiredText(dto.description, "描述"),
           studentInfo: dto.studentInfo === undefined ? undefined : this.nullableText(dto.studentInfo),
-          address: online ? null : dto.address === undefined ? undefined : this.nullableText(dto.address),
+          address,
           capacity: dto.capacity,
           latitude,
           longitude,

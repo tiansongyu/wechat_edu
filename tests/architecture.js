@@ -36,6 +36,16 @@ const migration = read("backend/prisma/migrations/202607150002_workflow_hardenin
 for (const field of ["statusNote", "submittedAt", "sourceEventId", "user_preferences"]) {
   assert.ok(migration.includes(field), `workflow migration should persist ${field}`);
 }
+const authLocationMigration = read("backend/prisma/migrations/202607150005_wechat_login_and_structured_locations/migration.sql");
+for (const field of ["lastLoginAt", "loginCount", "deviceIdHash", "province", "city"]) {
+  assert.ok(authLocationMigration.includes(field), `auth/location migration should persist ${field}`);
+}
+const authService = read("backend/src/modules/auth/auth.service.ts");
+assert.match(authService, /api\.weixin\.qq\.com\/sns\/jscode2session/);
+assert.match(authService, /deviceIdHash/);
+const resetScript = read("backend/prisma/reset-sample-data.ts");
+assert.match(resetScript, /RESET_SAMPLE_DATA/);
+assert.match(resetScript, /TRUNCATE TABLE/);
 const productionCompose = read("compose.production.yaml");
 assert.match(productionCompose, /WECHAT_LOGIN_MOCK:\s*"false"/);
 assert.match(productionCompose, /SEED_DEMO_DATA:\s*"false"/);
@@ -52,4 +62,4 @@ for (const nginxConfigPath of ["infra/nginx/default.conf", "infra/nginx/producti
 
 const project = JSON.parse(read("project.config.json"));
 assert.equal(project.appid, "wx02054be10e52aff0");
-console.log("Architecture checks passed: Docker services, production safeguards, dynamic upstream DNS, persistent workflow models, backend modules, and AppID.");
+console.log("Architecture checks passed: Docker services, production safeguards, real WeChat auth path, structured locations, reset guard, persistent workflow models, backend modules, and AppID.");

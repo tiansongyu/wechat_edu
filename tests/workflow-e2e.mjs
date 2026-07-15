@@ -44,6 +44,8 @@ function jobPayload(suffix, overrides = {}) {
   return {
     type: "TEACHING_NEED",
     title: `工作流回归-${suffix}-${runId}`,
+    province: "广东省",
+    city: "深圳市",
     district: "南山区",
     area: "科技园",
     grade: "高一",
@@ -74,7 +76,7 @@ async function adminLogin() {
 }
 
 async function wechatLogin(name, activeRole) {
-  const deviceId = `workflow-${name}-${runId}`;
+  const deviceId = `workflow-${encodeURIComponent(name)}-${runId}`;
   const session = await request("POST /api/v1/auth/wechat-login", "/api/v1/auth/wechat-login", {
     method: "POST",
     body: { code: `${name}-code-1-${runId}`, deviceId, nickname: name, activeRole }
@@ -176,7 +178,14 @@ assert.equal(me.id, parent.account.id);
 const parentProfile = await request("PATCH /api/v1/profiles/parent", "/api/v1/profiles/parent", {
   method: "PATCH",
   token: parent.accessToken,
-  body: { city: "深圳", district: "南山区", address: "科技园" }
+  body: {
+    province: "广东省",
+    city: "深圳市",
+    district: "南山区",
+    address: "深圳市南山区科技园",
+    latitude: 22.54042,
+    longitude: 113.93457
+  }
 });
 assert.equal(parentProfile.district, "南山区");
 
@@ -723,11 +732,13 @@ await request("PATCH /admin-api/v1/users/:id/status", `/admin-api/v1/users/${tea
 const refreshBeforeLogout = parent.refreshToken;
 const refreshedParent = await request("POST /api/v1/auth/refresh", "/api/v1/auth/refresh", {
   method: "POST",
-  body: { refreshToken: refreshBeforeLogout, activeRole: "PARENT" }
+  body: { refreshToken: refreshBeforeLogout, activeRole: "PARENT" },
+  headers: { "x-device-id": parent.deviceId }
 });
 await expectStatus(401, "/api/v1/auth/refresh", {
   method: "POST",
-  body: { refreshToken: refreshBeforeLogout, activeRole: "PARENT" }
+  body: { refreshToken: refreshBeforeLogout, activeRole: "PARENT" },
+  headers: { "x-device-id": parent.deviceId }
 });
 const switched = await request("POST /api/v1/auth/switch-role", "/api/v1/auth/switch-role", {
   method: "POST",
@@ -748,7 +759,8 @@ const logout = await request("POST /api/v1/auth/logout", "/api/v1/auth/logout", 
 assert.equal(logout.success, true);
 await expectStatus(401, "/api/v1/auth/refresh", {
   method: "POST",
-  body: { refreshToken: refreshedParent.refreshToken, activeRole: "PARENT" }
+  body: { refreshToken: refreshedParent.refreshToken, activeRole: "PARENT" },
+  headers: { "x-device-id": parent.deviceId }
 });
 
 console.log(`Workflow E2E passed: ${covered.size} unique endpoint contracts, database state machines and admin overrides.`);

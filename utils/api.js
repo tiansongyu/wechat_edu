@@ -84,6 +84,8 @@ function createJob(form, publishType) {
     data: {
       type: publishType === "need" ? "TEACHING_NEED" : "TEACHER_OFFER",
       title: form.title.trim(),
+      province: form.province || undefined,
+      city: form.city || undefined,
       district: form.district,
       area: form.area ? form.area.trim() : undefined,
       grade: form.grade,
@@ -107,6 +109,8 @@ function updateJob(id, form, version) {
     method: "PATCH",
     data: {
       title: form.title.trim(),
+      province: form.province || undefined,
+      city: form.city || undefined,
       district: form.district,
       area: form.area ? form.area.trim() : undefined,
       grade: form.grade,
@@ -304,7 +308,9 @@ function normalizeJob(item) {
     publisherInitial: item.owner && item.owner.nickname ? item.owner.nickname.slice(0, 1) : "人",
     publisherAvatar: item.owner && item.owner.avatarUrl ? item.owner.avatarUrl : "",
     distance,
-    locationLabel: [item.district, item.area].filter(Boolean).join(" · "),
+    locationLabel: item.district === "线上"
+      ? "线上授课"
+      : [item.city, item.district, item.area].filter(Boolean).join(" · "),
     createdLabel: formatDate(item.createdAt || item.publishedAt),
     favorite: Boolean(item.favorite),
     currentApplication: item.currentApplication || null

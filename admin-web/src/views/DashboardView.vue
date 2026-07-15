@@ -6,6 +6,7 @@ import { api, getApiErrorMessage } from "../api/client";
 const loading = ref(true);
 const metrics = ref<Record<string, number>>({});
 const distribution = ref<Array<{ status: string; count: number }>>([]);
+const integrations = ref<{ wechatLogin?: string; wechatConfigured?: boolean }>({});
 const cards = [
   ["users", "平台用户", "◎", "blue"],
   ["approvedTeachers", "认证教师", "✓", "green"],
@@ -18,6 +19,7 @@ onMounted(async () => {
     const { data } = await api.get("/dashboard");
     metrics.value = data.metrics;
     distribution.value = data.jobStatusDistribution;
+    integrations.value = data.integrations || {};
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error, "看板数据加载失败"));
   } finally {
@@ -28,6 +30,13 @@ onMounted(async () => {
 
 <template>
   <div v-loading="loading">
+    <el-alert
+      :type="integrations.wechatLogin === 'LIVE' && integrations.wechatConfigured ? 'success' : 'warning'"
+      :closable="false"
+      show-icon
+      :title="integrations.wechatLogin === 'LIVE' && integrations.wechatConfigured ? '微信真实登录已启用' : '当前为微信模拟登录；配置 AppSecret 后切换真实模式'"
+      class="integration-alert"
+    />
     <div class="metric-grid">
       <article v-for="card in cards" :key="card[0]" class="metric-card">
         <span :class="['metric-icon', `metric-icon--${card[3]}`]">{{ card[2] }}</span>

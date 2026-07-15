@@ -1,4 +1,5 @@
 const api = require("../../utils/api");
+const DEFAULT_REGION = ["广东省", "深圳市", "南山区"];
 
 const APPLICATION_STATUS = { PENDING: "待处理", ACCEPTED: "已录用", REJECTED: "未选中", CANCELLED: "已取消" };
 const APPOINTMENT_STATUS = { PENDING: "待确认", CONFIRMED: "已确认", COMPLETED: "已完成", CANCELLED: "已取消", DISPUTED: "有争议" };
@@ -27,7 +28,8 @@ Page({
     showSettings: false,
     settings: { jobNotice: true, chatNotice: true, privacyMode: true },
     showParentEditor: false,
-    parentForm: { city: "", district: "", address: "" },
+    parentRegion: DEFAULT_REGION,
+    parentForm: { province: "", city: "", district: "", address: "", latitude: "", longitude: "" },
     savingParent: false
   },
 
@@ -94,7 +96,15 @@ Page({
         posts,
         appointments,
         settings: { ...this.data.settings, ...(preferences || {}) },
-        parentForm: { city: parentProfile.city || "", district: parentProfile.district || "", address: parentProfile.address || "" },
+        parentRegion: [parentProfile.province || "广东省", parentProfile.city || "深圳市", parentProfile.district || "南山区"],
+        parentForm: {
+          province: parentProfile.province || "",
+          city: parentProfile.city || "",
+          district: parentProfile.district || "",
+          address: parentProfile.address || "",
+          latitude: parentProfile.latitude === null || parentProfile.latitude === undefined ? "" : parentProfile.latitude,
+          longitude: parentProfile.longitude === null || parentProfile.longitude === undefined ? "" : parentProfile.longitude
+        },
         loading: false,
         error: ""
       }, () => this.applyPanel());
@@ -225,17 +235,55 @@ Page({
   },
 
   closeParentEditor() { this.setData({ showParentEditor: false }); },
-  handleParentInput(event) { this.setData({ [`parentForm.${event.currentTarget.dataset.field}`]: event.detail.value }); },
+  handleParentRegion(event) {
+    const parentRegion = event.detail.value || DEFAULT_REGION;
+    this.setData({
+      parentRegion,
+      "parentForm.province": parentRegion[0],
+      "parentForm.city": parentRegion[1],
+      "parentForm.district": parentRegion[2],
+      "parentForm.address": "",
+      "parentForm.latitude": "",
+      "parentForm.longitude": ""
+    });
+  },
+
+  chooseParentLocation() {
+    if (!this.data.parentForm.district) {
+      wx.showToast({ title: "请先选择省市区", icon: "none" });
+      return;
+    }
+    wx.chooseLocation({
+      success: ({ address, name, latitude, longitude }) => {
+        this.setData({
+          "parentForm.address": [name, address].filter(Boolean).join(" · "),
+          "parentForm.latitude": latitude,
+          "parentForm.longitude": longitude
+        });
+      },
+      fail: (error) => {
+        if (error && /cancel/i.test(error.errMsg || "")) return;
+        wx.showToast({ title: "未能选择地址，请检查定位权限", icon: "none" });
+      }
+    });
+  },
 
   async saveParentProfile() {
     const form = this.data.parentForm;
-    if (!form.city.trim() || !form.district.trim()) {
-      wx.showToast({ title: "请填写城市和区域", icon: "none" });
+    if (!form.province.trim() || !form.city.trim() || !form.district.trim()) {
+      wx.showToast({ title: "请选择完整省市区", icon: "none" });
       return;
     }
     this.setData({ savingParent: true });
     try {
-      await api.updateParentProfile({ city: form.city.trim(), district: form.district.trim(), address: form.address.trim() });
+      await api.updateParentProfile({
+        province: form.province.trim(),
+        city: form.city.trim(),
+        district: form.district.trim(),
+        address: form.address.trim() || undefined,
+        latitude: form.latitude === "" ? undefined : Number(form.latitude),
+        longitude: form.longitude === "" ? undefined : Number(form.longitude)
+      });
       this.setData({ showParentEditor: false });
       await this.loadData(false);
       wx.showToast({ title: "资料已保存", icon: "success" });

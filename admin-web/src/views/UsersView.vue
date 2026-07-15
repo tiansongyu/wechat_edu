@@ -57,9 +57,11 @@ onMounted(load);
     <el-table :data="items" v-loading="loading">
       <el-table-column label="用户" min-width="190"><template #default="{ row }"><div class="user-cell"><span>{{ row.nickname?.slice(0, 1) }}</span><div><strong>{{ row.nickname }}</strong><small>{{ row.username || row.id.slice(0, 8) }}</small></div></div></template></el-table-column>
       <el-table-column label="角色" min-width="150"><template #default="{ row }"><el-tag v-for="role in row.roles" :key="role.roleCode" effect="plain">{{ role.roleCode }}</el-tag></template></el-table-column>
+      <el-table-column label="登录方式" width="110"><template #default="{ row }"><el-tag :type="row.loginProvider === 'WECHAT' ? 'success' : 'info'" effect="plain">{{ row.loginProvider === 'WECHAT' ? '微信' : '后台' }}</el-tag></template></el-table-column>
       <el-table-column prop="teacherProfile.auditStatus" label="教师认证" width="120" />
       <el-table-column label="状态" width="110"><template #default="{ row }"><el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'">{{ row.status }}</el-tag></template></el-table-column>
-      <el-table-column label="注册时间" width="180"><template #default="{ row }">{{ new Date(row.createdAt).toLocaleString() }}</template></el-table-column>
+      <el-table-column label="最近登录" width="180"><template #default="{ row }">{{ row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleString() : '尚未登录' }}</template></el-table-column>
+      <el-table-column label="登录次数" width="90"><template #default="{ row }">{{ row.loginCount || 0 }}</template></el-table-column>
       <el-table-column label="操作" width="120" fixed="right"><template #default="{ row }"><el-button link :type="row.status === 'ACTIVE' ? 'danger' : 'primary'" :loading="actionId === row.id" :disabled="Boolean(actionId) || isAdmin(row)" @click="toggle(row)">{{ isAdmin(row) ? "受保护" : row.status === "ACTIVE" ? "停用" : "恢复" }}</el-button></template></el-table-column>
     </el-table>
     <el-pagination v-model:current-page="query.page" v-model:page-size="query.pageSize" :total="total" layout="total, prev, pager, next" @change="load" />

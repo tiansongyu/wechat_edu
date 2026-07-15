@@ -69,7 +69,7 @@ onMounted(load);
       <el-table-column label="类型" width="120"><template #default="{ row }"><el-tag effect="plain">{{ row.type === 'TEACHING_NEED' ? '家教需求' : '老师求带' }}</el-tag></template></el-table-column>
       <el-table-column label="年级 / 科目" width="130"><template #default="{ row }">{{ row.grade }} · {{ row.subject }}</template></el-table-column>
       <el-table-column label="价格" width="115"><template #default="{ row }">¥{{ row.priceCents / 100 }}/{{ row.priceUnit }}</template></el-table-column>
-      <el-table-column label="区域" width="130"><template #default="{ row }">{{ row.district }} {{ row.area }}</template></el-table-column>
+      <el-table-column label="区域" min-width="180"><template #default="{ row }">{{ [row.province, row.city, row.district, row.area].filter(Boolean).join(' · ') }}</template></el-table-column>
       <el-table-column label="发布人" width="110"><template #default="{ row }">{{ row.owner.nickname }}</template></el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">

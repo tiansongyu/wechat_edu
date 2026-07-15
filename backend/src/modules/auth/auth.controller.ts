@@ -23,8 +23,13 @@ export class AuthController {
 
   @Public()
   @Post("refresh")
-  refresh(@Body() dto: RefreshDto, @Ip() ip: string, @Headers("user-agent") userAgent?: string) {
-    return this.auth.refresh(dto.refreshToken, ip, userAgent, dto.activeRole);
+  refresh(
+    @Body() dto: RefreshDto,
+    @Ip() ip: string,
+    @Headers("user-agent") userAgent?: string,
+    @Headers("x-device-id") deviceId?: string
+  ) {
+    return this.auth.refresh(dto.refreshToken, ip, userAgent, dto.activeRole, deviceId);
   }
 
   @ApiBearerAuth()

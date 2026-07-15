@@ -1,8 +1,12 @@
 const api = require("../../utils/api");
+const DEFAULT_REGION = ["广东省", "深圳市", "南山区"];
 
 const EMPTY_FORM = {
   title: "",
+  province: "",
+  city: "",
   district: "",
+  area: "",
   grade: "",
   subject: "",
   price: "",
@@ -26,11 +30,13 @@ Page({
     actionId: "",
     publishType: "need",
     form: { ...EMPTY_FORM },
-    districts: ["南山区", "福田区", "宝安区", "龙华区", "罗湖区", "线上"],
+    teachingModes: ["线下授课", "线上授课"],
+    modeIndex: 0,
+    isOnline: false,
+    regionValue: DEFAULT_REGION,
     grades: ["小学", "初中", "高中", "大学", "兴趣课"],
     subjects: ["数学", "英语", "语文", "物理", "化学", "全科", "编程", "其他"],
     settlements: ["课结", "日结", "周结", "月结"],
-    districtIndex: -1,
     gradeIndex: -1,
     subjectIndex: -1,
     settlementIndex: 0,
@@ -65,7 +71,9 @@ Page({
           editingId: "",
           editingVersion: 0,
           form: { ...EMPTY_FORM },
-          districtIndex: -1,
+          modeIndex: 0,
+          isOnline: false,
+          regionValue: DEFAULT_REGION,
           gradeIndex: -1,
           subjectIndex: -1,
           settlementIndex: 0
@@ -96,24 +104,54 @@ Page({
     const index = Number(event.detail.value);
     const range = this.data[`${field}s`];
     const value = range[index];
-    const updates = { [`${field}Index`]: index, [`form.${field}`]: value };
-    if (field === "district" && value === "线上") {
-      updates["form.address"] = "";
-      updates["form.latitude"] = "";
-      updates["form.longitude"] = "";
-    }
-    this.setData(updates);
+    this.setData({ [`${field}Index`]: index, [`form.${field}`]: value });
+  },
+
+  handleModePicker(event) {
+    const modeIndex = Number(event.detail.value);
+    const isOnline = modeIndex === 1;
+    const region = this.data.regionValue || DEFAULT_REGION;
+    this.setData({
+      modeIndex,
+      isOnline,
+      "form.province": isOnline ? "" : region[0],
+      "form.city": isOnline ? "" : region[1],
+      "form.district": isOnline ? "线上" : region[2],
+      "form.area": "",
+      "form.address": "",
+      "form.latitude": "",
+      "form.longitude": ""
+    });
+  },
+
+  handleRegionPicker(event) {
+    const regionValue = event.detail.value || DEFAULT_REGION;
+    this.setData({
+      regionValue,
+      "form.province": regionValue[0],
+      "form.city": regionValue[1],
+      "form.district": regionValue[2],
+      "form.area": "",
+      "form.address": "",
+      "form.latitude": "",
+      "form.longitude": ""
+    });
   },
 
   chooseLocation() {
-    if (this.data.form.district === "线上") {
+    if (this.data.isOnline) {
       wx.showToast({ title: "线上授课不需要选择地点", icon: "none" });
+      return;
+    }
+    if (!this.data.form.district) {
+      wx.showToast({ title: "请先选择省市区", icon: "none" });
       return;
     }
     wx.chooseLocation({
       success: ({ address, name, latitude, longitude }) => {
         this.setData({
-          "form.address": [name, address].filter(Boolean).join(" · "),
+          "form.area": name || "",
+          "form.address": address || name || "",
           "form.latitude": latitude,
           "form.longitude": longitude
         });
@@ -132,7 +170,8 @@ Page({
     const price = Number(form.price);
     if (!Number.isFinite(price) || price <= 0 || price > 1000000) return "请输入有效的课酬";
     if (!/^1[3-9]\d{9}$/.test(form.contact) && !/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(form.contact)) return "请填写有效手机号或微信号";
-    if (form.district !== "线上" && (!form.latitude || !form.longitude)) return "请选择真实授课地点，便于地图匹配";
+    if (form.district !== "线上" && (!form.province || !form.city)) return "请选择完整省市区";
+    if (form.district !== "线上" && (!form.address || !form.latitude || !form.longitude)) return "请通过地图搜索并选择真实授课地点";
     return "";
   },
 
@@ -157,7 +196,9 @@ Page({
             form: { ...EMPTY_FORM },
             editingId: "",
             editingVersion: 0,
-            districtIndex: -1,
+            modeIndex: 0,
+            isOnline: false,
+            regionValue: DEFAULT_REGION,
             gradeIndex: -1,
             subjectIndex: -1,
             settlementIndex: 0
@@ -176,7 +217,10 @@ Page({
   editPost(event) {
     const post = this.data.posts.find((item) => item.id === event.currentTarget.dataset.id);
     if (!post || !["DRAFT", "PENDING", "REJECTED"].includes(post.status)) return;
-    const districtIndex = this.data.districts.indexOf(post.district);
+    const isOnline = post.district === "线上";
+    const regionValue = isOnline
+      ? DEFAULT_REGION
+      : [post.province || "广东省", post.city || "深圳市", post.district || "南山区"];
     const gradeIndex = this.data.grades.indexOf(post.grade);
     const subjectIndex = this.data.subjects.indexOf(post.subject);
     const settlementIndex = this.data.settlements.indexOf(post.settlement);
@@ -185,7 +229,10 @@ Page({
       editingVersion: post.version,
       form: {
         title: post.title || "",
+        province: post.province || "",
+        city: post.city || "",
         district: post.district || "",
+        area: post.area || "",
         grade: post.grade || "",
         subject: post.subject || "",
         price: post.price || "",
@@ -198,7 +245,9 @@ Page({
         latitude: post.latitude === null || post.latitude === undefined ? "" : post.latitude,
         longitude: post.longitude === null || post.longitude === undefined ? "" : post.longitude
       },
-      districtIndex,
+      modeIndex: isOnline ? 1 : 0,
+      isOnline,
+      regionValue,
       gradeIndex,
       subjectIndex,
       settlementIndex: settlementIndex < 0 ? 0 : settlementIndex
@@ -212,7 +261,9 @@ Page({
       editingId: "",
       editingVersion: 0,
       form: { ...EMPTY_FORM },
-      districtIndex: -1,
+      modeIndex: 0,
+      isOnline: false,
+      regionValue: DEFAULT_REGION,
       gradeIndex: -1,
       subjectIndex: -1,
       settlementIndex: 0

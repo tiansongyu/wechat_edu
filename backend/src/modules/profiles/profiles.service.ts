@@ -103,6 +103,10 @@ export class ProfilesService {
   }
 
   updateParent(accountId: string, dto: UpdateParentProfileDto) {
+    const coordinatePairProvided = dto.latitude !== undefined || dto.longitude !== undefined;
+    if (coordinatePairProvided && (dto.latitude === undefined || dto.longitude === undefined)) {
+      throw new BadRequestException("经纬度必须同时提供");
+    }
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.parentProfile.findUnique({ where: { accountId } });
       const updated = await tx.parentProfile.upsert({
@@ -116,8 +120,19 @@ export class ProfilesService {
           action: "parent.profile.update",
           targetType: "ParentProfile",
           targetId: accountId,
-          before: before ? { city: before.city, district: before.district, address: before.address } : undefined,
-          after: { city: updated.city, district: updated.district, address: updated.address }
+          before: before ? {
+            province: before.province,
+            city: before.city,
+            district: before.district,
+            address: before.address
+          } : undefined,
+          after: {
+            province: updated.province,
+            city: updated.city,
+            district: updated.district,
+            address: updated.address,
+            hasCoordinates: updated.latitude !== null && updated.longitude !== null
+          }
         }
       });
       return updated;

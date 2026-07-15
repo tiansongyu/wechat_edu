@@ -17,32 +17,77 @@ export class AuthService {
 
   async wechatLogin(dto: WechatLoginDto, ip?: string, userAgent?: string) {
     const wxIdentity = await this.exchangeWechatCode(dto.code, dto.deviceId);
-    const account = await this.prisma.account.upsert({
-      where: { openid: wxIdentity.openid },
-      update: {
-        unionid: wxIdentity.unionid || undefined,
-        nickname: dto.nickname || undefined,
-        avatarUrl: dto.avatarUrl || undefined
+    const existing = await this.prisma.account.findFirst({
+      where: {
+        OR: [
+          { openid: wxIdentity.openid },
+          ...(wxIdentity.unionid ? [{ unionid: wxIdentity.unionid }] : [])
+        ]
       },
-      create: {
-        openid: wxIdentity.openid,
-        unionid: wxIdentity.unionid,
-        nickname: dto.nickname || "微信用户",
-        avatarUrl: dto.avatarUrl,
-        roles: {
-          create: [{ roleCode: RoleCode.PARENT }, { roleCode: RoleCode.TEACHER }]
-        },
-        parentProfile: { create: {} },
-        teacherProfile: { create: {} },
-        preference: { create: {} }
-      },
-      include: { roles: true, teacherProfile: true, parentProfile: true }
+      select: { id: true }
     });
-    this.assertActive(account.status);
+    const isNewAccount = !existing;
+    const account = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const current = existing
+        ? await tx.account.update({
+            where: { id: existing.id },
+            data: {
+              openid: wxIdentity.openid,
+              unionid: wxIdentity.unionid || undefined,
+              nickname: dto.nickname || undefined,
+              avatarUrl: dto.avatarUrl || undefined,
+              lastLoginAt: now,
+              loginCount: { increment: 1 }
+            }
+          })
+        : await tx.account.create({
+            data: {
+              openid: wxIdentity.openid,
+              unionid: wxIdentity.unionid,
+              nickname: dto.nickname || "微信用户",
+              avatarUrl: dto.avatarUrl,
+              lastLoginAt: now,
+              loginCount: 1
+            }
+          });
+
+      this.assertActive(current.status);
+
+      for (const roleCode of [RoleCode.PARENT, RoleCode.TEACHER]) {
+        await tx.accountRole.upsert({
+          where: { accountId_roleCode: { accountId: current.id, roleCode } },
+          update: {},
+          create: { accountId: current.id, roleCode }
+        });
+      }
+      await Promise.all([
+        tx.parentProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } }),
+        tx.teacherProfile.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } }),
+        tx.userPreference.upsert({ where: { accountId: current.id }, update: {}, create: { accountId: current.id } })
+      ]);
+      await tx.auditLog.create({
+        data: {
+          actorId: current.id,
+          action: isNewAccount ? "auth.wechat.register" : "auth.wechat.login",
+          targetType: "Account",
+          targetId: current.id,
+          after: { provider: "WECHAT", isNewAccount }
+        }
+      });
+      return tx.account.findUniqueOrThrow({
+        where: { id: current.id },
+        include: { roles: true, teacherProfile: true, parentProfile: true }
+      });
+    });
     const roles = account.roles.map((item) => item.roleCode);
     const requested = dto.activeRole || RoleCode.PARENT;
     const activeRole = roles.includes(requested) && requested !== RoleCode.ADMIN ? requested : RoleCode.PARENT;
-    return this.createSession(account, roles, activeRole, ip, userAgent);
+    return {
+      ...(await this.createSession(account, roles, activeRole, ip, userAgent, dto.deviceId)),
+      isNewAccount,
+      loginProvider: "WECHAT"
+    };
   }
 
   async adminLogin(dto: AdminLoginDto, ip?: string, userAgent?: string) {
@@ -59,7 +104,7 @@ export class AuthService {
     return this.createSession(account, roles, RoleCode.ADMIN, ip, userAgent);
   }
 
-  async refresh(refreshToken: string, ip?: string, userAgent?: string, requestedRole?: RoleCode) {
+  async refresh(refreshToken: string, ip?: string, userAgent?: string, requestedRole?: RoleCode, deviceId?: string) {
     const { sessionId, secret } = this.parseRefreshToken(refreshToken);
     const session = await this.prisma.refreshSession.findUnique({
       where: { id: sessionId },
@@ -68,19 +113,25 @@ export class AuthService {
     if (!session || session.revokedAt || session.expiresAt <= new Date()) {
       throw new UnauthorizedException("刷新凭证已过期");
     }
-    if (!this.safeEqual(session.tokenHash, this.hash(secret))) {
+    const tokenHash = this.hash(secret);
+    if (!this.safeEqual(session.tokenHash, tokenHash)) {
       await this.prisma.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
       throw new UnauthorizedException("刷新凭证无效");
+    }
+    if (session.deviceIdHash && (!deviceId || !this.safeEqual(session.deviceIdHash, this.hash(deviceId)))) {
+      await this.prisma.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
+      throw new UnauthorizedException("登录设备校验失败，请重新使用微信登录");
     }
     this.assertActive(session.account.status);
     const roles = session.account.roles.map((item) => item.roleCode);
     const defaultRole = roles.includes(RoleCode.ADMIN) && session.account.username ? RoleCode.ADMIN : roles[0];
     const activeRole = requestedRole && roles.includes(requestedRole) ? requestedRole : defaultRole;
     const nextSecret = randomBytes(32).toString("base64url");
-    await this.prisma.refreshSession.update({
-      where: { id: session.id },
+    const rotated = await this.prisma.refreshSession.updateMany({
+      where: { id: session.id, tokenHash, revokedAt: null, expiresAt: { gt: new Date() } },
       data: { tokenHash: this.hash(nextSecret), ipAddress: ip, userAgent }
     });
+    if (!rotated.count) throw new UnauthorizedException("刷新凭证已被使用，请重新登录");
     return {
       accessToken: await this.signAccess(session.account.id, roles, activeRole),
       refreshToken: `${session.id}.${nextSecret}`,
@@ -125,7 +176,8 @@ export class AuthService {
     roles: RoleCode[],
     activeRole: RoleCode,
     ip?: string,
-    userAgent?: string
+    userAgent?: string,
+    deviceId?: string
   ) {
     const secret = randomBytes(32).toString("base64url");
     const days = Number(this.config.get("REFRESH_TOKEN_DAYS") || 30);
@@ -135,6 +187,7 @@ export class AuthService {
         tokenHash: this.hash(secret),
         ipAddress: ip,
         userAgent,
+        deviceIdHash: deviceId ? this.hash(deviceId) : null,
         expiresAt: new Date(Date.now() + days * 86_400_000)
       }
     });
@@ -152,6 +205,8 @@ export class AuthService {
       nickname: account.nickname,
       avatarUrl: account.avatarUrl,
       status: account.status,
+      lastLoginAt: account.lastLoginAt,
+      loginCount: account.loginCount,
       roles: account.roles.map((item: any) => item.roleCode),
       activeRole,
       parentProfile: account.parentProfile || null,
@@ -180,9 +235,24 @@ export class AuthService {
       throw new ServiceUnavailableException("微信登录配置不完整");
     }
     const params = new URLSearchParams({ appid, secret, js_code: code, grant_type: "authorization_code" });
-    const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params}`);
+    let response: Response;
+    try {
+      response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params}`, {
+        signal: AbortSignal.timeout(8000)
+      });
+    } catch {
+      throw new ServiceUnavailableException("暂时无法连接微信登录服务，请稍后重试");
+    }
     const data = await response.json() as any;
-    if (!response.ok || !data.openid) throw new UnauthorizedException(data.errmsg || "微信登录失败");
+    if (!response.ok || data.errcode || !data.openid) {
+      if ([40029, 40163].includes(Number(data.errcode))) {
+        throw new UnauthorizedException("微信登录凭证无效，请重新登录");
+      }
+      if (Number(data.errcode) === 45011) {
+        throw new ServiceUnavailableException("微信登录请求过于频繁，请稍后重试");
+      }
+      throw new UnauthorizedException("微信身份校验失败，请重新登录");
+    }
     return { openid: data.openid, unionid: data.unionid };
   }
 

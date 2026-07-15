@@ -83,6 +83,8 @@ const job = await request("/api/v1/jobs", {
   body: {
     type: "TEACHING_NEED",
     title: `端到端测试数学家教 ${runId}`,
+    province: "广东省",
+    city: "深圳市",
     district: "南山区",
     area: "科技园",
     grade: "高一",
@@ -92,6 +94,7 @@ const job = await request("/api/v1/jobs", {
     settlement: "周结",
     schedule: "周六 14:00-16:00",
     description: "用于验证审核、报名和录用的完整业务链路。",
+    address: "深圳市南山区科技园",
     latitude: 22.54042,
     longitude: 113.93457,
     capacity: 1
