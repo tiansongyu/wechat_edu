@@ -21,14 +21,14 @@ for (const mapping of [
 assert.match(read("utils/config.js"), /http:\/\/89\.117\.20\.124:4000/);
 
 const schema = read("backend/prisma/schema.prisma");
-for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "Review", "UserPreference", "Message", "OutboxEvent", "AuditLog"]) {
+for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "Review", "UserPreference", "Message", "OutboxEvent", "AuditLog", "SystemSetting"]) {
   assert.match(schema, new RegExp(`model ${model} \\{`), `Prisma should include ${model}`);
 }
 assert.match(schema, /@@unique\(\[jobId, teacherId\]\)/);
 assert.match(schema, /Unsupported\("geography\(Point, 4326\)"\)/);
 
 const appModule = read("backend/src/app.module.ts");
-for (const moduleName of ["AuthModule", "ProfilesModule", "JobsModule", "ApplicationsModule", "AppointmentsModule", "ReviewsModule", "PreferencesModule", "AdminModule", "CommunicationsModule", "FilesModule"]) {
+for (const moduleName of ["AuthModule", "ProfilesModule", "JobsModule", "ApplicationsModule", "AppointmentsModule", "ReviewsModule", "PreferencesModule", "AdminModule", "CommunicationsModule", "FilesModule", "PlatformModule"]) {
   assert.match(appModule, new RegExp(moduleName));
 }
 
@@ -48,6 +48,9 @@ assert.match(reviewsMigration, /UNIQUE INDEX "reviews_appointmentId_reviewerId_k
 const reviewRoleIndexMigration = read("backend/prisma/migrations/202607160007_review_role_index/migration.sql");
 assert.match(reviewRoleIndexMigration, /reviews_revieweeId_revieweeRole_status_createdAt_idx/);
 assert.match(schema, /@@index\(\[revieweeId, revieweeRole, status, createdAt\(sort: Desc\)\]\)/);
+const platformSettingMigration = read("backend/prisma/migrations/202607160008_platform_public_setting/migration.sql");
+assert.match(platformSettingMigration, /platform\.public/);
+assert.match(platformSettingMigration, /ON CONFLICT \("key"\) DO NOTHING/);
 const authService = read("backend/src/modules/auth/auth.service.ts");
 assert.match(authService, /api\.weixin\.qq\.com\/sns\/jscode2session/);
 assert.match(authService, /deviceIdHash/);

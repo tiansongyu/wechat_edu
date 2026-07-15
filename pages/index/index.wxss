@@ -145,8 +145,12 @@
 }
 
 .identity-card__title {
+  display: block;
+  overflow: hidden;
   font-size: 28rpx;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .identity-card__verified {
@@ -185,15 +189,176 @@
 }
 
 .credit-button {
-  width: 118rpx;
-  height: 64rpx;
+  width: 142rpx;
+  height: 80rpx;
   margin: 0;
   padding: 0 12rpx;
   color: #2164d1;
-  font-size: 21rpx;
-  line-height: 64rpx;
+  font-size: 22rpx;
+  line-height: 80rpx;
   background: rgba(255, 255, 255, 0.84);
+  border-radius: 22rpx;
+}
+
+.platform-card {
+  overflow: hidden;
+  margin-top: 20rpx;
+  padding: 24rpx;
+  background: linear-gradient(145deg, #ffffff 0%, #fbfcff 65%, #f5f3ff 100%);
+  border: 1rpx solid #e8ebf4;
+  border-radius: 28rpx;
+  box-shadow: 0 12rpx 28rpx rgba(43, 59, 94, 0.06);
+}
+
+.platform-card__heading,
+.platform-card__state,
+.platform-metrics,
+.platform-metric {
+  display: flex;
+  align-items: center;
+}
+
+.platform-card__mascot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: 16rpx;
+  color: #6359d9;
+  font-size: 32rpx;
+  background: linear-gradient(145deg, #eef4ff, #f1ebff);
+  border-radius: 21rpx;
+}
+
+.platform-card__title,
+.platform-card__slogan,
+.platform-card__state-title,
+.platform-card__state-copy,
+.platform-metric__label {
+  display: block;
+}
+
+.platform-card__title {
+  color: #283249;
+  font-size: 27rpx;
+  font-weight: 750;
+}
+
+.platform-card__slogan {
+  margin-top: 5rpx;
+  color: #8b94a6;
+  font-size: 21rpx;
+}
+
+.platform-card__state {
+  justify-content: space-between;
+  min-height: 94rpx;
+  margin-top: 18rpx;
+  padding: 16rpx 18rpx;
+  color: #748097;
+  font-size: 21rpx;
+  background: #f5f7fb;
+  border-radius: 20rpx;
+}
+
+.platform-card__state--error {
+  color: #8a694d;
+  background: #fff8ed;
+}
+
+.platform-card__state-title {
+  color: #755337;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.platform-card__state-copy {
+  max-width: 400rpx;
+  margin-top: 5rpx;
+  overflow: hidden;
+  font-size: 21rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-card__state button {
+  width: auto;
+  min-width: 136rpx;
+  height: 80rpx;
+  margin: 0 0 0 16rpx;
+  padding: 0 18rpx;
+  color: #466fc9;
+  font-size: 21rpx;
+  line-height: 80rpx;
+  background: #edf4ff;
+  border-radius: 20rpx;
+}
+
+.platform-card__dots {
+  display: flex;
+  margin-right: 16rpx;
+  gap: 7rpx;
+}
+
+.platform-card__dots text {
+  width: 10rpx;
+  height: 10rpx;
+  background: #7999dd;
+  border-radius: 50%;
+}
+
+.platform-metrics {
+  justify-content: space-between;
+  margin: 20rpx -4rpx 0;
+}
+
+.platform-metric {
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 104rpx;
+  margin: 0 4rpx;
+  background: rgba(240, 244, 253, 0.78);
   border-radius: 18rpx;
+}
+
+.platform-metric__value {
+  color: #345fc7;
+  font-size: 29rpx;
+  font-weight: 780;
+}
+
+.platform-metric__unit {
+  margin-left: 3rpx;
+  color: #7e8ba5;
+  font-size: 21rpx;
+}
+
+.platform-metric__label {
+  margin-top: 5rpx;
+  overflow: hidden;
+  color: #788397;
+  font-size: 21rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trust-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14rpx;
+  gap: 10rpx;
+}
+
+.trust-highlights text {
+  padding: 9rpx 13rpx;
+  color: #3e775d;
+  font-size: 21rpx;
+  background: #edf8f2;
+  border-radius: 999rpx;
 }
 
 .notice-card {

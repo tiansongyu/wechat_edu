@@ -2,7 +2,9 @@
   <view class="detail-state" wx:if="{{loading}}"><view class="detail-spinner"></view><text>正在加载详情...</text></view>
   <view class="detail-state" wx:elif="{{error}}"><text class="detail-state__title">无法打开这条信息</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
   <block wx:elif="{{job}}">
+    <view class="detail-refresh-alert" wx:if="{{refreshError}}"><view><text class="detail-refresh-alert__title">身份已切换，详情更新稍慢</text><text class="detail-refresh-alert__copy">{{refreshError}}</text></view><button bindtap="retry">重试</button></view>
     <view class="detail-hero">
+      <view class="detail-role-strip"><text class="detail-role-strip__label">当前身份</text><text class="detail-role-strip__value">{{activeRole === 'TEACHER' ? '老师版' : '家长版'}}</text><text class="detail-role-strip__hint" wx:if="{{ownerRoleMismatch || viewerRoleMismatch}}">切换后仍需再次确认操作</text></view>
       <view class="detail-hero__meta"><text class="detail-hero__code">{{job.typeLabel}}</text><text class="detail-hero__location">{{job.locationLabel || '地点待沟通'}}{{job.distance ? ' · ' + job.distance : ''}}</text></view>
       <text class="detail-hero__title">{{job.title}}</text>
       <view class="detail-hero__price-row"><view class="detail-hero__price">¥<text>{{job.price}}</text><text class="detail-hero__unit">{{job.unit}}</text></view><view class="detail-hero__status">{{activeRole === 'TEACHER' ? applicationLabel : job.statusLabel}}</view></view>

@@ -103,6 +103,7 @@ Page({
       } else {
         throw new Error("缺少评价对象，请返回上一页重试");
       }
+      return true;
     } catch (error) {
       this.setData({
         loading: false,
@@ -110,6 +111,7 @@ Page({
         reviews: [],
         nextCursor: ""
       });
+      return false;
     }
   },
 
@@ -239,20 +241,22 @@ Page({
     if (!role || this.data.switchingRole || this.data.submitting) return;
     wx.showModal({
       title: "切换合作身份",
-      content: `这次合作使用的是${role === "TEACHER" ? "老师" : "家长"}身份。切换后只会重新加载评价，不会自动提交任何内容。`,
+      content: `这次合作使用的是${role === "TEACHER" ? "老师" : "家长"}身份。切换只会改变当前身份，不会自动申请、联系、发布、取消或评价任何内容。`,
       confirmText: "确认切换",
       confirmColor: "#3478f6",
       success: async ({ confirm }) => {
         if (!confirm || this.data.switchingRole) return;
         this.setData({ switchingRole: true });
         try {
-          await api.switchRole(role);
-          getApp().globalData.activeRole = role;
-          getApp().globalData.account = null;
-          getApp().globalData.authReady = null;
-          await getApp().ensureAuth(true);
-          await this.loadData(false);
-          wx.showToast({ title: `已进入${role === "TEACHER" ? "老师" : "家长"}版`, icon: "none" });
+          const result = await getApp().switchActiveRole(role);
+          this.setData({ account: result.account || this.data.account });
+          const refreshed = await this.loadData(false);
+          wx.showToast({
+            title: refreshed
+              ? `已进入${role === "TEACHER" ? "老师" : "家长"}版`
+              : "身份已切换，评价资料暂未刷新",
+            icon: "none"
+          });
         } catch (error) {
           wx.showToast({ title: error.message || "身份切换失败", icon: "none" });
         } finally {

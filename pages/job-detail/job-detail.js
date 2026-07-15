@@ -4,7 +4,9 @@ Page({
   data: {
     loading: true,
     error: "",
+    refreshError: "",
     action: "",
+    rolePromptOpen: false,
     job: null,
     jobId: "",
     account: null,
@@ -45,7 +47,7 @@ Page({
   },
 
   async loadData(showLoading = true) {
-    if (showLoading) this.setData({ loading: true, error: "" });
+    if (showLoading) this.setData({ loading: true, error: "", refreshError: "" });
     try {
       const account = await getApp().ensureAuth();
       const activeRole = account.activeRole || api.getActiveRole();
@@ -108,14 +110,19 @@ Page({
         publisherReviewError: "",
         publisherReviewLoading: job.type === "TEACHER_OFFER",
         loading: false,
-        error: ""
+        error: "",
+        refreshError: ""
       });
       if (job.type === "TEACHER_OFFER" && job.owner && job.owner.id) {
         this.loadPublisherReview(job.owner.id);
       }
       wx.setNavigationBarTitle({ title: job.title.slice(0, 12) });
+      return true;
     } catch (error) {
-      this.setData({ loading: false, error: error.message || "详情加载失败", job: null });
+      const message = error.message || "详情加载失败";
+      if (showLoading || !this.data.job) this.setData({ loading: false, error: message, refreshError: "", job: null });
+      else this.setData({ loading: false, error: "", refreshError: message });
+      return false;
     }
   },
 
@@ -155,7 +162,7 @@ Page({
     }
     wx.showModal({
       title: "确认申请",
-      content: "平台将使用数据库中的教师认证资料提交申请。",
+      content: "平台将使用你当前已通过审核的教师资料提交申请。",
       confirmText: "提交申请",
       confirmColor: "#3478f6",
       success: async ({ confirm }) => {
@@ -264,42 +271,50 @@ Page({
     wx.navigateTo({ url: `/pages/reviews/reviews?accountId=${job.owner.id}` });
   },
 
-  async switchRoleAndReload(role) {
-    if (this.data.action || this.data.activeRole === role) return true;
+  requestRoleSwitch(role) {
+    if (!role || this.data.action || this.data.rolePromptOpen || this.data.activeRole === role) return;
+    this.setData({ rolePromptOpen: true });
+    wx.showModal({
+      title: `切换到${role === "TEACHER" ? "老师" : "家长"}版？`,
+      content: "切换只会改变当前浏览与操作身份，不会自动申请、联系、发布、取消或评价任何内容。切换后仍停留在本页，请再次点击所需操作。",
+      confirmText: "确认切换",
+      confirmColor: "#3478f6",
+      success: ({ confirm }) => {
+        this.setData({ rolePromptOpen: false });
+        if (confirm) this.performRoleSwitch(role);
+      },
+      fail: () => this.setData({ rolePromptOpen: false })
+    });
+  },
+
+  async performRoleSwitch(role) {
+    if (this.data.action || this.data.activeRole === role) return;
     this.setData({ action: "role" });
-    wx.showLoading({ title: "切换中" });
-    let switched = false;
-    let errorMessage = "";
     try {
-      await api.switchRole(role);
-      getApp().globalData.activeRole = role;
-      getApp().globalData.account = null;
-      getApp().globalData.authReady = null;
-      await getApp().ensureAuth(true);
-      switched = true;
+      const result = await getApp().switchActiveRole(role);
+      this.setData({ activeRole: role, account: result.account || this.data.account });
+      const refreshed = await this.loadData(false);
+      wx.showToast({
+        title: refreshed
+          ? `已进入${role === "TEACHER" ? "老师" : "家长"}版，请再次操作`
+          : "身份已切换，详情暂未刷新",
+        icon: "none"
+      });
     } catch (error) {
-      errorMessage = error.message || "角色切换失败";
+      wx.showToast({ title: error.message || "身份切换失败", icon: "none" });
     } finally {
-      wx.hideLoading();
       this.setData({ action: "" });
     }
-    if (errorMessage) wx.showToast({ title: errorMessage, icon: "none" });
-    return switched;
   },
 
-  async switchViewerRole() {
-    const role = this.data.expectedViewerRole;
-    const switched = await this.switchRoleAndReload(role);
-    if (switched) {
-      await this.loadData(false);
-      wx.showToast({ title: `已进入${role === "TEACHER" ? "老师" : "家长"}版`, icon: "none" });
-    }
+  switchViewerRole() {
+    this.requestRoleSwitch(this.data.expectedViewerRole);
   },
 
-  async openMyPosts() {
+  openMyPosts() {
     if (this.data.ownerRoleMismatch) {
-      const switched = await this.switchRoleAndReload(this.data.ownerRole);
-      if (!switched) return;
+      this.requestRoleSwitch(this.data.ownerRole);
+      return;
     }
     wx.switchTab({ url: "/pages/publish/publish" });
   },

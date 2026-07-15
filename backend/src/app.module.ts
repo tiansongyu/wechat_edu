@@ -15,6 +15,7 @@ import { FilesModule } from "./modules/files/files.module";
 import { PreferencesModule } from "./modules/preferences/preferences.module";
 import { AppointmentsModule } from "./modules/appointments/appointments.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
+import { PlatformModule } from "./modules/platform/platform.module";
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { ReviewsModule } from "./modules/reviews/reviews.module";
     FilesModule,
     PreferencesModule,
     AppointmentsModule,
-    ReviewsModule
+    ReviewsModule,
+    PlatformModule
   ],
   controllers: [HealthController],
   providers: [

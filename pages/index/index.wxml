@@ -10,11 +10,20 @@
       <view class="identity-card__main" bindtap="goProfile"><text class="identity-card__title">{{account.nickname || '微信用户'}}</text><text class="identity-card__phone">{{verificationLabel}}</text></view>
       <button class="credit-button" loading="{{actionId === 'role'}}" bindtap="switchRole">切换{{activeRole === 'TEACHER' ? '家长' : '老师'}}版</button>
     </view>
+    <view class="platform-card">
+      <view class="platform-card__heading"><view class="platform-card__mascot">✦</view><view><text class="platform-card__title">{{platformOverview ? platformOverview.brand.name : '平台公开信息'}}</text><text class="platform-card__slogan" wx:if="{{platformOverview}}">{{platformOverview.brand.slogan}}</text><text class="platform-card__slogan" wx:else>{{platformOverviewLoading ? '正在读取平台概览' : '公开信息暂时不可用'}}</text></view></view>
+      <view class="platform-card__state" wx:if="{{platformOverviewLoading}}"><view class="platform-card__dots"><text></text><text></text><text></text></view><text>正在更新平台概览，不影响浏览信息</text></view>
+      <view class="platform-card__state platform-card__state--error" wx:elif="{{platformOverviewError}}"><view><text class="platform-card__state-title">概览暂时没有赶上</text><text class="platform-card__state-copy">{{platformOverviewError}}</text></view><button bindtap="retryPlatformOverview">重新获取</button></view>
+      <block wx:elif="{{platformOverview}}">
+        <view class="platform-metrics"><view class="platform-metric" wx:for="{{platformMetricItems}}" wx:key="key"><view><text class="platform-metric__value">{{item.displayValue}}</text><text class="platform-metric__unit">{{item.unit}}</text></view><text class="platform-metric__label">{{item.label}}</text></view></view>
+        <view class="trust-highlights"><text wx:for="{{platformOverview.trustHighlights}}" wx:key="*this">✓ {{item}}</text></view>
+      </block>
+    </view>
     <view class="category-grid"><view wx:for="{{quickSubjects}}" wx:key="label" class="category-card {{selectedSubject === item.label ? 'category-card--active' : ''}}" data-subject="{{item.label}}" bindtap="chooseSubject" hover-class="pressable--active"><view class="category-card__icon category-card__icon--blue">{{item.icon}}</view><text class="category-card__label">{{item.label}}</text></view></view>
     <scroll-view class="filter-scroll" scroll-x enhanced show-scrollbar="false"><view class="filter-row"><picker wx:for="{{filterLabels}}" wx:key="*this" class="filter-picker" range="{{filterOptions[index]}}" value="{{filterIndexes[index]}}" data-position="{{index}}" bindchange="handleFilterChange"><view class="filter-chip {{filterIndexes[index] > 0 ? 'filter-chip--active' : ''}}"><text>{{item}}</text><text class="filter-chip__arrow">⌄</text></view></picker></view></scroll-view>
     <view class="shortcut-row"><view class="shortcut-card shortcut-card--map" bindtap="goMap" hover-class="pressable--active"><view><text class="shortcut-card__title">地图寻单</text><text class="shortcut-card__copy">按真实距离查看</text></view><view class="shortcut-card__icon">⌖</view></view><view class="shortcut-card shortcut-card--publish" bindtap="goPublish" hover-class="pressable--active"><view><text class="shortcut-card__title">发布信息</text><text class="shortcut-card__copy">提交平台审核</text></view><view class="shortcut-card__icon">＋</view></view></view>
     <view class="jobs-head"><view><text class="jobs-head__title">{{activeRole === 'TEACHER' ? '最新家教需求' : '认证老师求带'}}</text><text class="jobs-head__count">{{resultCopy}}</text></view><view class="jobs-head__filter" bindtap="resetFilters">重置筛选</view></view>
-    <view class="page-state" wx:if="{{loading}}"><view class="state-spinner"></view><text>正在从数据库加载...</text></view>
+    <view class="page-state" wx:if="{{loading}}"><view class="state-spinner"></view><text>正在为你寻找合适的信息...</text></view>
     <view class="page-state page-state--error" wx:elif="{{error}}"><text class="page-state__title">加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
     <view class="job-list" wx:elif="{{filteredJobs.length}}">
       <view class="job-card" wx:for="{{filteredJobs}}" wx:key="id">
@@ -28,6 +37,6 @@
         <view class="job-card__actions"><button class="apply-button {{item.currentApplication ? 'apply-button--pending' : ''}}" loading="{{actionId === item.id}}" data-id="{{item.id}}" bindtap="applyJob" aria-label="{{activeRole === 'TEACHER' ? item.actionLabel : '查看老师'}}：{{item.title}}">{{activeRole === 'TEACHER' ? item.actionLabel : '查看老师'}}</button><button class="icon-button {{item.favorite ? 'icon-button--favorite' : ''}}" loading="{{actionId === 'favorite-' + item.id}}" data-id="{{item.id}}" bindtap="toggleFavorite" aria-label="{{item.favorite ? '取消收藏' : '收藏'}}：{{item.title}}">{{item.favorite ? '♥' : '♡'}}</button><button class="icon-button" open-type="share" data-id="{{item.id}}" aria-label="分享：{{item.title}}">↗</button></view>
       </view>
     </view>
-    <view class="empty-card" wx:else><view class="empty-card__icon">⌕</view><text class="empty-card__title">暂无匹配信息</text><text class="empty-card__copy">数据库中目前没有符合条件的已发布内容</text><button class="empty-card__button" bindtap="resetFilters">查看全部</button></view>
+    <view class="empty-card" wx:else><view class="empty-card__icon">⌕</view><text class="empty-card__title">暂时没有匹配信息</text><text class="empty-card__copy">换个科目或区域看看，新的发布也许正在路上</text><button class="empty-card__button" bindtap="resetFilters">查看全部</button></view>
   </view>
 </view>

@@ -14,12 +14,14 @@ const ROUTE_INDEX = ITEMS.reduce((result, item, index) => {
 Component({
   data: {
     selected: 0,
+    switchingPath: "",
     items: ITEMS
   },
 
   lifetimes: {
     attached() {
       this.syncSelected();
+      if (wx.nextTick) wx.nextTick(() => this.syncSelected());
     }
   },
 
@@ -41,9 +43,21 @@ Component({
 
     switchTab(event) {
       const { index, path } = event.currentTarget.dataset;
-      if (!path) return;
-      this.setData({ selected: Number(index) });
-      wx.switchTab({ url: path });
+      if (!path || this.data.switchingPath) return;
+      const targetIndex = Number(index);
+      if (targetIndex === this.data.selected) {
+        this.syncSelected();
+        return;
+      }
+      this.setData({ switchingPath: path });
+      wx.switchTab({
+        url: path,
+        success: () => this.setData({ selected: targetIndex }),
+        complete: () => {
+          this.setData({ switchingPath: "" });
+          this.syncSelected();
+        }
+      });
     }
   }
 });

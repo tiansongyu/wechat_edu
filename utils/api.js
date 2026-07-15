@@ -38,6 +38,10 @@ function getAccount() {
   return request("/api/v1/auth/me");
 }
 
+function getPlatformOverview() {
+  return request("/api/v1/platform/overview");
+}
+
 function updateAccount(data) {
   return request("/api/v1/auth/me", { method: "PATCH", data });
 }
@@ -368,6 +372,7 @@ module.exports = {
   getActiveRole,
   getJob,
   getMineJobs,
+  getPlatformOverview,
   getPreferences,
   getCounterpartReputation,
   getTeacherApplicationEligibility,

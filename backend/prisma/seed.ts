@@ -223,6 +223,17 @@ async function main() {
     update: {},
     create: { key: "platform", value: { name: "家教直聘", teacherAuditRequired: true, jobAuditRequired: true } }
   });
+  await prisma.systemSetting.upsert({
+    where: { key: "platform.public" },
+    update: {},
+    create: {
+      key: "platform.public",
+      value: {
+        brand: { name: "家教直聘", slogan: "认真匹配每一次教与学" },
+        trustHighlights: ["教师资料经平台审核", "真实合作才能评价", "隐私信息分级保护"]
+      }
+    }
+  });
 }
 
 main()

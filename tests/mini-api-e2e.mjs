@@ -9,6 +9,7 @@ const expectedEndpoints = [
   "GET /api/v1/auth/me",
   "PATCH /api/v1/auth/me",
   "POST /api/v1/auth/switch-role",
+  "GET /api/v1/platform/overview",
   "GET /api/v1/profiles/teacher",
   "PATCH /api/v1/profiles/teacher",
   "POST /api/v1/profiles/teacher/certifications",
@@ -129,6 +130,22 @@ assert.equal(parent.account.activeRole, "PARENT");
 
 const parentMe = await mini("GET /api/v1/auth/me", "/api/v1/auth/me", { token: parent.accessToken });
 assert.equal(parentMe.id, parent.account.id);
+
+const platformOverview = await mini(
+  "GET /api/v1/platform/overview",
+  "/api/v1/platform/overview",
+  { token: parent.accessToken }
+);
+assert.equal(typeof platformOverview.brand.name, "string");
+assert.ok(platformOverview.brand.name.trim(), "platform brand must come from a non-empty database setting");
+assert.ok(Array.isArray(platformOverview.trustHighlights));
+for (const value of Object.values(platformOverview.metrics)) {
+  assert.ok(Number.isInteger(value) && value >= 0, "platform metrics must be non-negative database counts");
+}
+const publicOverview = JSON.stringify(platformOverview);
+for (const privateField of ["openid", "wechatConfigured", "pendingTeachers", "pendingApplications", "loginCount"]) {
+  assert.equal(publicOverview.includes(privateField), false, `platform overview must not expose ${privateField}`);
+}
 
 const renamedParent = await mini("PATCH /api/v1/auth/me", "/api/v1/auth/me", {
   method: "PATCH",

@@ -5,10 +5,12 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const storage = new Map();
 
-global.getApp = () => ({
+const appStub = {
   globalData: { account: null, activeRole: "PARENT" },
-  ensureAuth: async () => ({ id: "test-account", activeRole: "PARENT" })
-});
+  ensureAuth: async () => ({ id: "test-account", activeRole: "PARENT" }),
+  switchActiveRole: async (role) => ({ activeRole: role, account: { id: "test-account", activeRole: role }, profileRefreshError: null })
+};
+global.getApp = () => appStub;
 global.getCurrentPages = () => [{ route: "pages/index/index" }];
 const capturedRequests = [];
 global.wx = {
@@ -25,6 +27,7 @@ global.wx = {
   navigateTo() {},
   redirectTo() {},
   switchTab() {},
+  nextTick(callback) { callback(); },
   setNavigationBarTitle() {},
   stopPullDownRefresh() {}
 };
@@ -62,6 +65,9 @@ const teacherTemplate = fs.readFileSync(path.join(root, "pages/teacher-profile/t
 const reviewsTemplate = fs.readFileSync(path.join(root, "pages/reviews/reviews.wxml"), "utf8");
 const applicationsTemplate = fs.readFileSync(path.join(root, "pages/job-applications/job-applications.wxml"), "utf8");
 const reviewsSource = fs.readFileSync(path.join(root, "pages/reviews/reviews.js"), "utf8");
+const homeTemplate = fs.readFileSync(path.join(root, "pages/index/index.wxml"), "utf8");
+const detailTemplate = fs.readFileSync(path.join(root, "pages/job-detail/job-detail.wxml"), "utf8");
+const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
 assert.match(publishTemplate, /picker[^>]+mode="region"/);
 assert.doesNotMatch(publishTemplate, /data-field="address"/);
 assert.match(profileTemplate, /picker[^>]+mode="region"/);
@@ -73,6 +79,16 @@ assert.match(reviewsTemplate, /bindtap="selectRating"/);
 assert.match(reviewsTemplate, /bindtap="submitReview"/);
 assert.match(reviewsTemplate, /disabled="\{\{submitting\}\}"/);
 assert.match(applicationsTemplate, /reviewLabel/);
+assert.match(homeTemplate, /platformOverview\.brand\.name/);
+assert.match(homeTemplate, /bindtap="retryPlatformOverview"/);
+assert.match(detailTemplate, /当前身份/);
+assert.match(appSource, /switchActiveRole\(role\)/);
+assert.equal((appSource.match(/switchActiveRole\(role\)/g) || []).length, 2, "role switching should have one public app method plus its queued recursion");
+for (const rolePage of ["pages/index/index.js", "pages/profile/profile.js", "pages/job-detail/job-detail.js", "pages/reviews/reviews.js"]) {
+  const source = fs.readFileSync(path.join(root, rolePage), "utf8");
+  assert.doesNotMatch(source, /api\.switchRole\(/, `${rolePage} must use the app-level single-flight role switch`);
+  assert.match(source, /不会自动申请、联系、发布、取消或评价/, `${rolePage} must explain role-switch safety before confirming`);
+}
 assert.doesNotMatch(fs.readFileSync(path.join(root, "pages/profile/profile.js"), "utf8"), /teacherProfile\.score/);
 assert.doesNotMatch(fs.readFileSync(path.join(root, "pages/job-applications/job-applications.js"), "utf8"), /profile\.score/);
 assert.doesNotMatch(reviewsSource, /target\.label\.replace/, "review target labels must be treated as optional API data");
@@ -80,6 +96,7 @@ assert.match(reviewsSource, /this\.data\.target\.role === "TEACHER"/, "paginatio
 
 const pageFiles = appConfig.pages.map((page) => `${page}.js`);
 const pages = pageFiles.map((file) => loadDefinition(file, "Page"));
+const appDefinition = loadDefinition("app.js", "App");
 assert.ok(pages.every((page) => page.data && typeof page === "object"));
 assert.equal(typeof pages[0].loadData, "function");
 assert.equal(typeof pages[1].loadNearby, "function");
@@ -88,6 +105,8 @@ assert.equal(typeof pages[7].confirmAndHandle, "function");
 assert.equal(typeof pages[8].sendMessage, "function");
 assert.equal(typeof pages[9].submitReview, "function");
 assert.equal(typeof pages[9].switchRequiredRole, "function");
+assert.equal(typeof appDefinition.switchActiveRole, "function");
+assert.equal(appDefinition.switchActiveRole.length, 1, "role switching must not accept a business callback");
 assert.equal(pages[9].data.rating, 0, "reviews must require an explicit star selection");
 assert.equal(pages[9].validateReview.call({
   data: { rating: 0, selectedTags: [], content: "" }
@@ -119,6 +138,36 @@ assert.equal(apiClient.getTeacherApplicationEligibility({ auditStatus: "REJECTED
 assert.equal(apiClient.getTeacherApplicationEligibility({}).actionLabel, "完善教师认证");
 for (const method of ["createReview", "listTeacherReviews", "listMyReceivedReviews", "getCounterpartReputation"]) {
   assert.equal(typeof apiClient[method], "function", `${method} should be available to mini-program pages`);
+}
+assert.equal(typeof apiClient.getPlatformOverview, "function");
+
+async function verifyRoleSwitchSingleFlight() {
+  const originalSwitchRole = apiClient.switchRole;
+  const originalGetAccount = apiClient.getAccount;
+  let switchCalls = 0;
+  let releaseSwitch;
+  apiClient.switchRole = () => {
+    switchCalls += 1;
+    return new Promise((resolve) => { releaseSwitch = resolve; });
+  };
+  apiClient.getAccount = async () => { throw new Error("模拟资料刷新失败"); };
+  const app = {
+    ...appDefinition,
+    _roleSwitchPromise: null,
+    _roleSwitchTarget: "",
+    globalData: { account: { id: "test-account", activeRole: "PARENT" }, activeRole: "PARENT", authReady: null, authError: "" }
+  };
+  const first = app.switchActiveRole("TEACHER");
+  const second = app.switchActiveRole("TEACHER");
+  assert.equal(first, second, "concurrent switches to the same role must share one promise");
+  assert.equal(switchCalls, 1);
+  releaseSwitch({ activeRole: "TEACHER" });
+  const result = await first;
+  assert.equal(app.globalData.activeRole, "TEACHER", "successful switch API must establish the new role immediately");
+  assert.match(result.profileRefreshError.message, /资料刷新失败/);
+  assert.equal(app.globalData.account, null, "failed profile refresh must remain retryable");
+  apiClient.switchRole = originalSwitchRole;
+  apiClient.getAccount = originalGetAccount;
 }
 
 const teacherCompletion = pages[4].normalizeAppointment({
@@ -191,6 +240,7 @@ for (const file of [...pageFiles, "app.js", "utils/api.js", "utils/request.js"])
 
 requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-000000000000/read", { method: "POST" })
   .then(async () => {
+    await verifyRoleSwitchSingleFlight();
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0].method, "POST");
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
@@ -213,6 +263,63 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/me\/reviews\/received\?cursor=cursor-2&limit=5$/);
     await apiClient.getCounterpartReputation("appointment-1");
     assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/appointments\/appointment-1\/counterpart-reputation$/);
+    await apiClient.getPlatformOverview();
+    assert.match(capturedRequests[capturedRequests.length - 1].url, /\/api\/v1\/platform\/overview$/);
+
+    const originalOverview = apiClient.getPlatformOverview;
+    apiClient.getPlatformOverview = async () => ({
+      brand: { name: "家教直聘", slogan: "让每次匹配更安心" },
+      trustHighlights: ["教师资料经平台审核", "真实合作才能评价"],
+      metrics: { approvedTeachers: 2, publishedJobs: 3, completedAppointments: 4, publishedReviews: 5 }
+    });
+    const overviewPage = {
+      ...pages[0],
+      data: { ...pages[0].data, jobs: [{ id: "preserved-job" }] },
+      setData(update) { this.data = { ...this.data, ...update }; }
+    };
+    assert.equal(await overviewPage.loadPlatformOverview.call(overviewPage), true);
+    assert.deepEqual(overviewPage.data.platformMetricItems.map((item) => item.value), [2, 3, 4, 5]);
+    apiClient.getPlatformOverview = async () => { throw new Error("模拟概览中断"); };
+    assert.equal(await overviewPage.loadPlatformOverview.call(overviewPage), false);
+    assert.equal(overviewPage.data.jobs[0].id, "preserved-job", "overview failure must not clear the jobs feed");
+    assert.equal(overviewPage.data.platformMetricItems.length, 0, "overview failure must not display fake zero metrics");
+    assert.match(overviewPage.data.platformOverviewError, /概览中断/);
+    apiClient.getPlatformOverview = originalOverview;
+
+    const originalShowModal = wx.showModal;
+    let pendingModal;
+    let modalCount = 0;
+    let confirmedSwitches = 0;
+    wx.showModal = (options) => { pendingModal = options; modalCount += 1; };
+    const rolePromptPage = {
+      ...pages[0],
+      data: { ...pages[0].data, activeRole: "PARENT", rolePromptOpen: false, actionId: "" },
+      setData(update) { this.data = { ...this.data, ...update }; },
+      performRoleSwitch(role) { confirmedSwitches += role === "TEACHER" ? 1 : 0; }
+    };
+    rolePromptPage.switchRole.call(rolePromptPage);
+    rolePromptPage.switchRole.call(rolePromptPage);
+    assert.equal(modalCount, 1, "rapid role-switch taps must open only one confirmation");
+    pendingModal.success({ confirm: false });
+    assert.equal(confirmedSwitches, 0, "cancelling role confirmation must not trigger a switch request");
+    rolePromptPage.switchRole.call(rolePromptPage);
+    pendingModal.success({ confirm: true });
+    assert.equal(confirmedSwitches, 1);
+    wx.showModal = originalShowModal;
+
+    let detailRoleRequests = 0;
+    let detailTabSwitches = 0;
+    const originalSwitchTab = wx.switchTab;
+    wx.switchTab = () => { detailTabSwitches += 1; };
+    const ownerMismatchDetail = {
+      ...pages[6],
+      data: { ...pages[6].data, ownerRoleMismatch: true, ownerRole: "TEACHER" },
+      requestRoleSwitch(role) { if (role === "TEACHER") detailRoleRequests += 1; }
+    };
+    ownerMismatchDetail.openMyPosts.call(ownerMismatchDetail);
+    assert.equal(detailRoleRequests, 1);
+    assert.equal(detailTabSwitches, 0, "detail role switch must stay put instead of opening a business page");
+    wx.switchTab = originalSwitchTab;
 
     const originalCreateReview = apiClient.createReview;
     apiClient.createReview = async () => { throw new Error("模拟网络中断"); };

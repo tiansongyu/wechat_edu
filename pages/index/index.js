@@ -12,6 +12,7 @@ Page({
     loading: true,
     error: "",
     actionId: "",
+    rolePromptOpen: false,
     account: null,
     accountInitial: "人",
     activeRole: "PARENT",
@@ -29,11 +30,59 @@ Page({
     filterLabels: ["全市区", "全部年级", "全部科目", "结算方式"],
     filterOptions: [FILTERS.district, FILTERS.grade, FILTERS.subject, FILTERS.settlement],
     filterIndexes: [0, 0, 0, 0],
-    resultCopy: "正在加载"
+    resultCopy: "正在加载",
+    platformOverview: null,
+    platformMetricItems: [],
+    platformOverviewLoading: true,
+    platformOverviewError: ""
   },
 
   onShow() {
     this.loadData();
+    this.loadPlatformOverview();
+  },
+
+  async loadPlatformOverview() {
+    if (this.data.platformOverviewLoading && this.data.platformOverview) return true;
+    this.setData({ platformOverviewLoading: true, platformOverviewError: "" });
+    try {
+      const overview = await api.getPlatformOverview();
+      const metrics = overview && overview.metrics;
+      if (!metrics || !Array.isArray(overview.trustHighlights)) throw new Error("平台概览数据格式异常");
+      const metricDefinitions = [
+        ["approvedTeachers", "认证老师", "位"],
+        ["publishedJobs", "在架信息", "条"],
+        ["completedAppointments", "完成合作", "次"],
+        ["publishedReviews", "真实评价", "条"]
+      ];
+      const platformMetricItems = metricDefinitions.map(([key, label, unit]) => {
+        const value = Number(metrics[key]);
+        if (!Number.isFinite(value) || value < 0) throw new Error("平台概览数据格式异常");
+        const displayValue = value >= 10000
+          ? `${(value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`
+          : String(value);
+        return { key, label, unit, value, displayValue };
+      });
+      this.setData({
+        platformOverview: overview,
+        platformMetricItems,
+        platformOverviewLoading: false,
+        platformOverviewError: ""
+      });
+      return true;
+    } catch (error) {
+      this.setData({
+        platformOverview: null,
+        platformMetricItems: [],
+        platformOverviewLoading: false,
+        platformOverviewError: error.message || "平台概览暂时加载失败"
+      });
+      return false;
+    }
+  },
+
+  retryPlatformOverview() {
+    this.loadPlatformOverview();
   },
 
   async loadData(showLoading = true) {
@@ -85,8 +134,10 @@ Page({
         loading: false,
         error: ""
       }, () => this.applyFilters());
+      return true;
     } catch (error) {
       this.setData({ loading: false, error: error.message || "数据加载失败", jobs: [], filteredJobs: [] });
+      return false;
     }
   },
 
@@ -162,28 +213,46 @@ Page({
     return { PENDING: "申请审核中", ACCEPTED: "已被录用", REJECTED: "本次未选中", CANCELLED: "重新申请" }[application.status] || "查看申请";
   },
 
-  async switchRole() {
-    if (this.data.actionId) return;
+  switchRole() {
+    if (this.data.actionId || this.data.rolePromptOpen) return;
     const next = this.data.activeRole === "TEACHER" ? "PARENT" : "TEACHER";
+    this.setData({ rolePromptOpen: true });
+    wx.showModal({
+      title: `切换到${next === "TEACHER" ? "老师" : "家长"}版？`,
+      content: "切换只会改变当前浏览与操作身份，不会自动申请、联系、发布、取消或评价任何内容。",
+      confirmText: "确认切换",
+      confirmColor: "#3478f6",
+      success: ({ confirm }) => {
+        this.setData({ rolePromptOpen: false });
+        if (confirm) this.performRoleSwitch(next);
+      },
+      fail: () => this.setData({ rolePromptOpen: false })
+    });
+  },
+
+  async performRoleSwitch(next) {
+    if (this.data.actionId) return;
     this.setData({ actionId: "role" });
-    wx.showLoading({ title: "切换中" });
-    let toast;
     try {
-      await api.switchRole(next);
-      getApp().globalData.activeRole = next;
-      getApp().globalData.account = null;
-      getApp().globalData.authReady = null;
-      await getApp().ensureAuth(true);
+      const result = await getApp().switchActiveRole(next);
+      this.setData({
+        activeRole: next,
+        roleName: next === "TEACHER" ? "老师版" : "家长版",
+        account: result.account || this.data.account
+      });
       this.resetFilters();
-      await this.loadData(false);
-      toast = { title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" };
+      const refreshed = await this.loadData(false);
+      wx.showToast({
+        title: refreshed
+          ? `已进入${next === "TEACHER" ? "老师" : "家长"}版`
+          : "身份已切换，页面资料暂未刷新",
+        icon: "none"
+      });
     } catch (error) {
-      toast = { title: error.message || "切换失败", icon: "none" };
+      wx.showToast({ title: error.message || "身份切换失败", icon: "none" });
     } finally {
-      wx.hideLoading();
       this.setData({ actionId: "" });
     }
-    wx.showToast(toast);
   },
 
   openDetail(event) {

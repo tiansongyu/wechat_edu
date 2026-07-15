@@ -9,6 +9,7 @@ Page({
     loading: true,
     error: "",
     actionId: "",
+    rolePromptOpen: false,
     account: null,
     accountInitial: "人",
     showNicknameEditor: false,
@@ -140,8 +141,10 @@ Page({
       }, () => this.applyPanel());
       getApp().globalData.account = account;
       getApp().globalData.activeRole = activeRole;
+      return true;
     } catch (error) {
       this.setData({ loading: false, error: error.message || "个人中心加载失败", visibleItems: [] });
+      return false;
     }
   },
 
@@ -267,28 +270,48 @@ Page({
     }
   },
 
-  async switchRole() {
-    if (this.data.actionId) return;
+  switchRole() {
+    if (this.data.actionId || this.data.rolePromptOpen) return;
     const next = this.data.activeRole === "TEACHER" ? "PARENT" : "TEACHER";
+    this.setData({ rolePromptOpen: true });
+    wx.showModal({
+      title: `切换到${next === "TEACHER" ? "老师" : "家长"}版？`,
+      content: "切换只会改变当前浏览与操作身份，不会自动申请、联系、发布、取消或评价任何内容。",
+      confirmText: "确认切换",
+      confirmColor: "#3478f6",
+      success: ({ confirm }) => {
+        this.setData({ rolePromptOpen: false });
+        if (confirm) this.performRoleSwitch(next);
+      },
+      fail: () => this.setData({ rolePromptOpen: false })
+    });
+  },
+
+  async performRoleSwitch(next) {
+    if (this.data.actionId) return;
     this.setData({ actionId: "role" });
-    wx.showLoading({ title: "切换中" });
-    let toast;
     try {
-      await api.switchRole(next);
-      getApp().globalData.activeRole = next;
-      getApp().globalData.account = null;
-      getApp().globalData.authReady = null;
-      await getApp().ensureAuth(true);
-      this.setData({ activePanel: "applications", showParentEditor: false, showSettings: false });
-      await this.loadData(false);
-      toast = { title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" };
+      const result = await getApp().switchActiveRole(next);
+      this.setData({
+        activeRole: next,
+        roleName: next === "TEACHER" ? "老师版" : "家长版",
+        account: result.account || this.data.account,
+        activePanel: "applications",
+        showParentEditor: false,
+        showSettings: false
+      });
+      const refreshed = await this.loadData(false);
+      wx.showToast({
+        title: refreshed
+          ? `已进入${next === "TEACHER" ? "老师" : "家长"}版`
+          : "身份已切换，个人资料暂未刷新",
+        icon: "none"
+      });
     } catch (error) {
-      toast = { title: error.message || "切换失败", icon: "none" };
+      wx.showToast({ title: error.message || "身份切换失败", icon: "none" });
     } finally {
-      wx.hideLoading();
       this.setData({ actionId: "" });
     }
-    wx.showToast(toast);
   },
 
   selectPanel(event) {
