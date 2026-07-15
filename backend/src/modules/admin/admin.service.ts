@@ -419,9 +419,23 @@ export class AdminService {
         DISPUTED: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED]
       };
       if (!transitions[appointment.status].includes(dto.status)) throw new ConflictException("预约当前状态不允许该操作");
+      const handledAt = new Date();
+      const completionData = dto.status === AppointmentStatus.COMPLETED
+        ? {
+            parentCompletedAt: appointment.parentCompletedAt ?? handledAt,
+            teacherCompletedAt: appointment.teacherCompletedAt ?? handledAt,
+            completedAt: appointment.completedAt ?? handledAt
+          }
+        : {};
       const result = await tx.appointment.updateMany({
         where: { id: appointmentId, version: dto.version },
-        data: { status: dto.status, statusNote: dto.note?.trim() || null, handledAt: new Date(), version: { increment: 1 } }
+        data: {
+          status: dto.status,
+          statusNote: dto.note?.trim() || null,
+          handledAt,
+          ...completionData,
+          version: { increment: 1 }
+        }
       });
       if (!result.count) throw new ConflictException("预约记录已变化，请刷新后重试");
       const updated = await tx.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
@@ -461,7 +475,14 @@ export class AdminService {
           targetType: "Appointment",
           targetId: appointmentId,
           before: { status: appointment.status, version: appointment.version },
-          after: { status: updated.status, version: updated.version, note: updated.statusNote }
+          after: {
+            status: updated.status,
+            version: updated.version,
+            note: updated.statusNote,
+            parentCompletedAt: updated.parentCompletedAt?.toISOString() ?? null,
+            teacherCompletedAt: updated.teacherCompletedAt?.toISOString() ?? null,
+            completedAt: updated.completedAt?.toISOString() ?? null
+          }
         }
       });
       return updated;

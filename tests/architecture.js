@@ -18,17 +18,17 @@ for (const mapping of [
 ]) {
   assert.ok(compose.includes(mapping), `compose should include port mapping ${mapping}`);
 }
-assert.match(read("utils/config.js"), /https:\/\/tablet-litter-rocker\.ngrok-free\.dev/);
+assert.match(read("utils/config.js"), /http:\/\/89\.117\.20\.124:4000/);
 
 const schema = read("backend/prisma/schema.prisma");
-for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "UserPreference", "Message", "OutboxEvent", "AuditLog"]) {
+for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "Review", "UserPreference", "Message", "OutboxEvent", "AuditLog"]) {
   assert.match(schema, new RegExp(`model ${model} \\{`), `Prisma should include ${model}`);
 }
 assert.match(schema, /@@unique\(\[jobId, teacherId\]\)/);
 assert.match(schema, /Unsupported\("geography\(Point, 4326\)"\)/);
 
 const appModule = read("backend/src/app.module.ts");
-for (const moduleName of ["AuthModule", "ProfilesModule", "JobsModule", "ApplicationsModule", "AppointmentsModule", "PreferencesModule", "AdminModule", "CommunicationsModule", "FilesModule"]) {
+for (const moduleName of ["AuthModule", "ProfilesModule", "JobsModule", "ApplicationsModule", "AppointmentsModule", "ReviewsModule", "PreferencesModule", "AdminModule", "CommunicationsModule", "FilesModule"]) {
   assert.match(appModule, new RegExp(moduleName));
 }
 
@@ -40,6 +40,11 @@ const authLocationMigration = read("backend/prisma/migrations/202607150005_wecha
 for (const field of ["lastLoginAt", "loginCount", "deviceIdHash", "province", "city"]) {
   assert.ok(authLocationMigration.includes(field), `auth/location migration should persist ${field}`);
 }
+const reviewsMigration = read("backend/prisma/migrations/202607160006_completion_reviews/migration.sql");
+for (const field of ["parentCompletedAt", "teacherCompletedAt", "completedAt", "requestHash", "claimedAt", "reviews_rating_check"]) {
+  assert.ok(reviewsMigration.includes(field), `completion/reviews migration should persist ${field}`);
+}
+assert.match(reviewsMigration, /UNIQUE INDEX "reviews_appointmentId_reviewerId_key"/);
 const authService = read("backend/src/modules/auth/auth.service.ts");
 assert.match(authService, /api\.weixin\.qq\.com\/sns\/jscode2session/);
 assert.match(authService, /deviceIdHash/);

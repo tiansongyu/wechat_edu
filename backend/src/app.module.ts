@@ -14,6 +14,7 @@ import { CommunicationsModule } from "./modules/communications/communications.mo
 import { FilesModule } from "./modules/files/files.module";
 import { PreferencesModule } from "./modules/preferences/preferences.module";
 import { AppointmentsModule } from "./modules/appointments/appointments.module";
+import { ReviewsModule } from "./modules/reviews/reviews.module";
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { AppointmentsModule } from "./modules/appointments/appointments.module";
     CommunicationsModule,
     FilesModule,
     PreferencesModule,
-    AppointmentsModule
+    AppointmentsModule,
+    ReviewsModule
   ],
   controllers: [HealthController],
   providers: [

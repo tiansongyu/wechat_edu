@@ -4,6 +4,12 @@ import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { PrismaClient } from "./generated/prisma/client";
 import { OutboxStatus } from "./generated/prisma/enums";
+import {
+  buildOutboxClaimWhere,
+  buildOutboxDispatchWhere,
+  outboxProcessingLeaseMs,
+  outboxQueueJobId
+} from "./outbox-lease";
 
 const connectionString = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
@@ -12,26 +18,41 @@ if (!connectionString || !redisUrl) throw new Error("DATABASE_URL and REDIS_URL 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const redis = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 const queue = new Queue("domain-events", { connection: redis as any });
+const processingLeaseMs = outboxProcessingLeaseMs();
 
 const worker = new Worker(
   "domain-events",
   async (job) => {
     const event = await prisma.outboxEvent.findUnique({ where: { id: job.data.eventId } });
     if (!event || event.status === OutboxStatus.PUBLISHED) return;
+    const claimedAt = new Date();
     const claimed = await prisma.outboxEvent.updateMany({
-      where: { id: event.id, status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] } },
-      data: { status: OutboxStatus.PROCESSING, attempts: { increment: 1 }, lastError: null }
+      where: buildOutboxClaimWhere(event.id, claimedAt, processingLeaseMs),
+      data: { status: OutboxStatus.PROCESSING, claimedAt, attempts: { increment: 1 }, lastError: null }
     });
     if (!claimed.count) return;
     const payload = event.payload as Record<string, string | null>;
     try {
-      const notify = async (accountId: string, title: string, content: string, data: Record<string, string | null>) => {
+      const notify = async (
+        accountId: string,
+        title: string,
+        content: string,
+        data: Record<string, string | null>,
+        critical = false
+      ) => {
         const preference = await prisma.userPreference.findUnique({ where: { accountId }, select: { jobNotice: true } });
-        if (preference?.jobNotice === false) return;
+        if (!critical && preference?.jobNotice === false) return;
         await prisma.notification.upsert({
           where: { sourceEventId: event.id },
           update: {},
-          create: { accountId, type: event.aggregateType === "Appointment" ? "SYSTEM" : "APPLICATION", title, content, data, sourceEventId: event.id }
+          create: {
+            accountId,
+            type: event.aggregateType === "Application" ? "APPLICATION" : "SYSTEM",
+            title,
+            content,
+            data,
+            sourceEventId: event.id
+          }
         });
       };
       if (event.eventType === "application.created" && payload.ownerId) {
@@ -71,15 +92,30 @@ const worker = new Worker(
           await notify(recipient, title, content, { appointmentId: payload.appointmentId, jobId: payload.jobId });
         }
       }
+      if (event.eventType === "review.created" && payload.revieweeId) {
+        await notify(
+          payload.revieweeId,
+          "收到新的合作评价",
+          "合作方已提交评价，可在评价记录中查看。",
+          {
+            reviewId: payload.reviewId,
+            appointmentId: payload.appointmentId,
+            reviewerRole: payload.reviewerRole,
+            revieweeRole: payload.revieweeRole
+          },
+          true
+        );
+      }
       await prisma.outboxEvent.update({
         where: { id: event.id },
-        data: { status: OutboxStatus.PUBLISHED, processedAt: new Date(), lastError: null }
+        data: { status: OutboxStatus.PUBLISHED, claimedAt: null, processedAt: new Date(), lastError: null }
       });
     } catch (error) {
       await prisma.outboxEvent.update({
         where: { id: event.id },
         data: {
           status: OutboxStatus.FAILED,
+          claimedAt: null,
           lastError: error instanceof Error ? error.message.slice(0, 1000) : "Unknown worker error",
           availableAt: new Date(Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(event.attempts, 6)))
         }
@@ -91,18 +127,15 @@ const worker = new Worker(
 );
 
 async function dispatchOutbox() {
+  const now = new Date();
   const events = await prisma.outboxEvent.findMany({
-    where: {
-      status: { in: [OutboxStatus.PENDING, OutboxStatus.FAILED] },
-      availableAt: { lte: new Date() },
-      attempts: { lt: 10 }
-    },
+    where: buildOutboxDispatchWhere(now, processingLeaseMs),
     orderBy: { createdAt: "asc" },
     take: 100
   });
   for (const event of events) {
     await queue.add(event.eventType, { eventId: event.id }, {
-      jobId: `${event.id}-${event.attempts}`,
+      jobId: outboxQueueJobId(event, now, processingLeaseMs),
       attempts: 5,
       backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: 1000,

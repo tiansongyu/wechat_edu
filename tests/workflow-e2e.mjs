@@ -410,7 +410,17 @@ appointmentA = await request("POST /api/v1/appointments/:id/complete", `/api/v1/
   token: parent.accessToken,
   body: { reason: "课程已经完成" }
 });
+assert.equal(appointmentA.status, "CONFIRMED");
+assert.ok(appointmentA.parentCompletedAt);
+assert.equal(appointmentA.teacherCompletedAt, null);
+appointmentA = await request("POST /api/v1/appointments/:id/complete", `/api/v1/appointments/${appointmentA.id}/complete`, {
+  method: "POST",
+  token: teacherA.accessToken,
+  body: { reason: "教师确认课程已经完成" }
+});
 assert.equal(appointmentA.status, "COMPLETED");
+assert.ok(appointmentA.teacherCompletedAt);
+assert.ok(appointmentA.completedAt);
 
 const cancelJob = await createAndApproveJob(admin.accessToken, parent.accessToken, "取消后重报", { capacity: 2 });
 const cancelledApplication = await apply(teacherA.accessToken, cancelJob.id, "cancel-reapply");

@@ -135,7 +135,8 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0].method, "POST");
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
-    assert.equal(capturedRequests[0].header["ngrok-skip-browser-warning"], "true", "real-device requests must bypass the ngrok browser warning page");
+    const expectedNgrokBypass = requestClient.API_BASE_URL.includes(".ngrok-free.") ? "true" : undefined;
+    assert.equal(capturedRequests[0].header["ngrok-skip-browser-warning"], expectedNgrokBypass, "the ngrok bypass header must only be sent through a free ngrok tunnel");
 
     const originalUpdateAccount = apiClient.updateAccount;
     let nicknamePayload;
@@ -159,7 +160,7 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(profilePage.data.showNicknameEditor, false);
     apiClient.updateAccount = originalUpdateAccount;
 
-    console.log("Smoke checks passed: database-only client flows, nickname editing, teacher application eligibility, valid empty JSON writes, ngrok real-device bypass, 9 pages, stable session identity, and native tab bar.");
+    console.log("Smoke checks passed: database-only client flows, nickname editing, teacher application eligibility, valid empty JSON writes, environment-aware tunnel headers, 9 pages, stable session identity, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);

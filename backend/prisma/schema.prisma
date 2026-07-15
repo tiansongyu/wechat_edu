@@ -53,6 +53,12 @@ enum AppointmentStatus {
   DISPUTED
 }
 
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  REMOVED
+}
+
 enum NotificationType {
   APPLICATION
   AUDIT
@@ -95,6 +101,8 @@ model Account {
   auditLogs       AuditLog[]           @relation("AuditActor")
   idempotencyKeys IdempotencyRecord[]
   preference      UserPreference?
+  writtenReviews  Review[]             @relation("ReviewWriter")
+  receivedReviews Review[]             @relation("ReviewRecipient")
 
   @@map("accounts")
 }
@@ -238,22 +246,48 @@ model Application {
 }
 
 model Appointment {
-  id            String            @id @default(uuid()) @db.Uuid
-  jobId         String            @db.Uuid
-  applicationId String            @unique @db.Uuid
-  status        AppointmentStatus @default(PENDING)
-  startAt       DateTime?         @db.Timestamptz(3)
-  note          String?           @db.VarChar(1000)
-  statusNote    String?           @db.VarChar(1000)
-  version       Int               @default(1)
-  handledAt     DateTime?         @db.Timestamptz(3)
-  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
-  job           JobPost           @relation(fields: [jobId], references: [id], onDelete: Restrict)
-  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  id                 String            @id @default(uuid()) @db.Uuid
+  jobId              String            @db.Uuid
+  applicationId      String            @unique @db.Uuid
+  status             AppointmentStatus @default(PENDING)
+  startAt            DateTime?         @db.Timestamptz(3)
+  note               String?           @db.VarChar(1000)
+  statusNote         String?           @db.VarChar(1000)
+  version            Int               @default(1)
+  handledAt          DateTime?         @db.Timestamptz(3)
+  parentCompletedAt  DateTime?         @db.Timestamptz(3)
+  teacherCompletedAt DateTime?         @db.Timestamptz(3)
+  completedAt        DateTime?         @db.Timestamptz(3)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+  job                JobPost           @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  application        Application       @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  reviews            Review[]
 
   @@index([jobId, status])
   @@map("appointments")
+}
+
+model Review {
+  id            String       @id @default(uuid()) @db.Uuid
+  appointmentId String       @db.Uuid
+  reviewerId    String       @db.Uuid
+  revieweeId    String       @db.Uuid
+  reviewerRole  RoleCode
+  revieweeRole  RoleCode
+  rating        Int
+  tags          String[]     @default([])
+  content       String?      @db.Text
+  status        ReviewStatus @default(PUBLISHED)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+  appointment   Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  reviewer      Account      @relation("ReviewWriter", fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewee      Account      @relation("ReviewRecipient", fields: [revieweeId], references: [id], onDelete: Restrict)
+
+  @@unique([appointmentId, reviewerId])
+  @@index([revieweeId, status, createdAt(sort: Desc)])
+  @@map("reviews")
 }
 
 model Favorite {
@@ -335,31 +369,32 @@ model UserPreference {
 }
 
 model RefreshSession {
-  id        String    @id @default(uuid()) @db.Uuid
-  accountId String    @db.Uuid
-  tokenHash String    @db.VarChar(128)
-  userAgent String?   @db.VarChar(500)
-  ipAddress String?   @db.VarChar(64)
-  deviceIdHash String? @db.VarChar(128)
-  expiresAt DateTime  @db.Timestamptz(3)
-  revokedAt DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
-  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid()) @db.Uuid
+  accountId    String    @db.Uuid
+  tokenHash    String    @db.VarChar(128)
+  userAgent    String?   @db.VarChar(500)
+  ipAddress    String?   @db.VarChar(64)
+  deviceIdHash String?   @db.VarChar(128)
+  expiresAt    DateTime  @db.Timestamptz(3)
+  revokedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, expiresAt])
   @@map("refresh_sessions")
 }
 
 model IdempotencyRecord {
-  id        String   @id @default(uuid()) @db.Uuid
-  actorId   String   @db.Uuid
-  scope     String   @db.VarChar(80)
-  key       String   @db.VarChar(128)
-  response  Json
-  expiresAt DateTime @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  actor     Account  @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String   @db.Uuid
+  scope       String   @db.VarChar(80)
+  key         String   @db.VarChar(128)
+  requestHash String?  @db.VarChar(64)
+  response    Json
+  expiresAt   DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  actor       Account  @relation(fields: [actorId], references: [id], onDelete: Cascade)
 
   @@unique([actorId, scope, key])
   @@index([expiresAt])
@@ -375,6 +410,7 @@ model OutboxEvent {
   status        OutboxStatus @default(PENDING)
   attempts      Int          @default(0)
   availableAt   DateTime     @default(now()) @db.Timestamptz(3)
+  claimedAt     DateTime?    @db.Timestamptz(3)
   processedAt   DateTime?    @db.Timestamptz(3)
   lastError     String?      @db.VarChar(1000)
   createdAt     DateTime     @default(now()) @db.Timestamptz(3)

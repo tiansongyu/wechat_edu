@@ -15,7 +15,7 @@ export class AppointmentsController {
 
   @Get()
   list(@CurrentUser() user: RequestUser) {
-    return this.appointments.list(user.id);
+    return this.appointments.list(user.id, user.activeRole);
   }
 
   @Roles(RoleCode.TEACHER)
@@ -28,14 +28,14 @@ export class AppointmentsController {
     return this.appointments.confirm(user.id, id, dto.reason);
   }
 
-  @Roles(RoleCode.PARENT)
+  @Roles(RoleCode.PARENT, RoleCode.TEACHER)
   @Post(":id/complete")
   complete(
     @CurrentUser() user: RequestUser,
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: AppointmentCommandDto
   ) {
-    return this.appointments.complete(user.id, id, dto.reason);
+    return this.appointments.complete(user.id, id, dto.reason, user.activeRole);
   }
 
   @Roles(RoleCode.PARENT, RoleCode.TEACHER)
