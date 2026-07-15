@@ -18,7 +18,10 @@ for (const mapping of [
 ]) {
   assert.ok(compose.includes(mapping), `compose should include port mapping ${mapping}`);
 }
-assert.match(read("utils/config.js"), /http:\/\/89\.117\.20\.124:4000/);
+assert.match(read("utils/config.js"), /https:\/\/tablet-litter-rocker\.ngrok-free\.dev/);
+const gatewayConfig = read("infra/nginx/default.conf");
+assert.match(gatewayConfig, /location \/tutor-link\//, "test gateway should proxy signed MinIO uploads on the HTTPS API origin");
+assert.match(gatewayConfig, /proxy_set_header Host \$http_host;/, "signed MinIO uploads must preserve the public Host header");
 
 const schema = read("backend/prisma/schema.prisma");
 for (const model of ["Account", "TeacherProfile", "JobPost", "Application", "Appointment", "Review", "ReviewReport", "Conversation", "ConversationMember", "Notification", "UserPreference", "Message", "OutboxEvent", "AuditLog", "SystemSetting"]) {

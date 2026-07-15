@@ -78,9 +78,9 @@ DOCKER_BUILD_PROXY=http://host.docker.internal:7897 docker compose up -d --build
 
 1. 使用微信开发者工具导入仓库根目录。
 2. 当前 AppID 已配置为 `wx02054be10e52aff0`。
-3. 当前代码提交使用服务器 Docker 网关 `http://89.117.20.124:4000`；本地回归时可临时改为 `http://127.0.0.1:4000`，但不得提交本地地址。
-4. 微信体验版真机请求仍要求已备案的 HTTPS 合法域名；正式体验前应将 [`utils/config.js`](utils/config.js) 替换为映射到该网关的 HTTPS API 域名，不能把裸 IP/HTTP 当作正式配置。
-5. 在微信公众平台配置相同的 `request` 合法域名。
+3. 当前真机测试使用 `https://tablet-litter-rocker.ngrok-free.dev`；本地回归时可临时改为 `http://127.0.0.1:4000`，但不得提交本地地址。
+4. 在微信公众平台将同一 HTTPS 地址配置为 `request` 合法域名；免费 ngrok 只用于测试，正式发布前应替换为稳定、已备案的 HTTPS 域名。
+5. 修改 [`utils/config.js`](utils/config.js) 后必须在微信开发者工具中重新编译并上传/预览，旧的真机包不会自动更新。
 6. 正式环境设置 `WECHAT_APP_SECRET`，并将 `WECHAT_LOGIN_MOCK=false`。
 
 Docker 负责部署 API、管理后台和数据服务；微信小程序本身仍需通过微信开发者工具上传和提交审核。
