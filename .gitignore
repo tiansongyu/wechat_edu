@@ -11,4 +11,6 @@ coverage/
 backend/src/generated/
 admin-web/.vite/
 data/
+.deploy-backups/
+infra/nginx/certs/
 *.tsbuildinfo

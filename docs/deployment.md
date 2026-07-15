@@ -1,5 +1,50 @@
 # Docker 部署说明
 
+## 一键部署
+
+服务器首次拿到 `deploy.sh` 后，在项目根目录执行：
+
+```bash
+git fetch origin main && git switch main && git pull --ff-only origin main && chmod +x deploy.sh && ./deploy.sh
+```
+
+脚本会拒绝空值、`change-me` 和默认口令；如果提示某个密钥不合格，请先只修改服务器 `.env` 中对应项，
+不要把 `.env` 或密钥提交到 Git。
+
+默认使用体验模式：保留 `GATEWAY_PORT`（默认 `4000`）上的 HTTP 网关，但强制
+`NODE_ENV=production`、`WECHAT_LOGIN_MOCK=false` 和 `SEED_DEMO_DATA=false`。脚本会依次完成环境与
+Compose 校验、应用镜像构建、PostgreSQL 备份、增量迁移、容器替换，并实际请求 `/health` 与
+`/api/v1/platform/overview`；任一环节失败都会打印容器状态与相关日志，并且不会清库或删除数据卷。
+体验模式默认把 PostgreSQL、Redis 和 MinIO 管理控制台的宿主机端口限制到 `127.0.0.1`，MinIO API
+仍按 `.env` 暴露以支持现有预签名上传流程。HTTP 裸 IP 只用于服务器联调或关闭合法域名校验的开发者工具；
+微信真机体验版仍应尽快切换到已配置为 request 合法域名的 HTTPS 域名。
+
+日常更新代码并一键重新部署仍使用同一条命令。只检查环境而不修改容器或数据库：
+
+```bash
+./deploy.sh --check
+```
+
+拥有 HTTPS 域名和证书后，使用生产模式：
+
+```bash
+DEPLOY_BASE_URL=https://api.example.com ./deploy.sh production
+```
+
+生产模式要求证书位于 `infra/nginx/certs/fullchain.pem` 和
+`infra/nginx/certs/privkey.pem`，并使用 `compose.production.yaml` 的 80/443 网关配置。部署前数据库备份默认
+保存在 `.deploy-backups/`，可通过 `DEPLOY_BACKUP_DIR` 改到服务器的独立备份盘。证书目录已被 Git 忽略；
+显式传入 `DEPLOY_BASE_URL` 时会严格校验证书有效期、信任链与域名，不会跳过 TLS 错误。
+
+脚本要求 Docker Compose `2.24.4` 或更高版本，并默认拒绝用脏 Git 工作树构建。它只支持本仓库 Compose
+管理的 PostgreSQL，且会校验应用、迁移和备份指向同一数据库。部署前 dump 是一致性快照而不是自动回滚机制；
+正式生产还应启用 PostgreSQL PITR/持续归档，并保持数据库迁移向后兼容。
+如果 Docker Hub 临时不可达但服务器已有所需基础镜像缓存，可显式使用
+`DEPLOY_PULL_BASE_IMAGES=false ./deploy.sh`；正常部署应保留默认值以获取基础镜像安全更新。
+
+`WECHAT_APP_SECRET` 只能写入服务器 `.env`。如果密钥曾经提交到 Git，即使最新版本删除了明文，历史提交
+仍可能保留它，必须在微信公众平台轮换后再更新服务器 `.env`。
+
 ## 开发环境
 
 ```bash
@@ -68,7 +113,7 @@ RUN_DOCKER_PERSISTENCE_TEST=true npm --prefix backend run test:persistence
 
 ## 生产环境
 
-1. 准备 Linux 服务器、域名、Docker Engine 和 Compose Plugin。
+1. 准备 Linux 服务器、域名、Docker Engine 和 Compose Plugin 2.24.4 以上版本。
 2. 将 `.env.example` 复制为 `.env`，替换所有 `change-me` 和默认密码。
 3. 设置 `WECHAT_APP_SECRET`；生产覆盖配置会强制关闭模拟登录，并禁止写入演示数据。
 4. 设置 `MINIO_PUBLIC_ENDPOINT` 为认证文件使用的公网 HTTPS 文件域名，同时设置 `MINIO_PUBLIC_PORT=443`、`MINIO_PUBLIC_USE_SSL=true`，并通过反向代理或对象存储网关转发到 MinIO。
@@ -76,7 +121,7 @@ RUN_DOCKER_PERSISTENCE_TEST=true npm --prefix backend run test:persistence
 6. 执行：
 
 ```bash
-docker compose -f compose.yaml -f compose.production.yaml up -d --build
+DEPLOY_BASE_URL=https://api.example.com ./deploy.sh production
 ```
 
 生产配置不会将 PostgreSQL、Redis 和 MinIO 暴露到公网，也不会写入演示家长、教师和家教单。迁移阶段只幂等初始化角色、系统设置及首次管理员账号，已存在管理员不会被部署过程重置密码。API 容器为无状态设计，可以通过 Compose scale 或编排平台增加副本：

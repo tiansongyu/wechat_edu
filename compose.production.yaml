@@ -6,6 +6,9 @@ services:
     volumes:
       - ./infra/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
       - ./infra/nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      # production.conf 会把 HTTP 重定向到 HTTPS；直接检查上游可避免 BusyBox wget 的证书限制。
+      test: ["CMD", "wget", "-Y", "off", "-q", "--spider", "http://api:3000/health"]
 
   api:
     environment:
