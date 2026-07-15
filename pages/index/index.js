@@ -18,6 +18,9 @@ Page({
     roleName: "家长版",
     locationLabel: "资料未完善",
     verificationLabel: "资料未认证",
+    teacherCanApply: false,
+    teacherApplicationAction: "完善教师认证",
+    teacherApplicationReason: "请先完善并提交教师认证资料",
     query: "",
     jobs: [],
     filteredJobs: [],
@@ -40,6 +43,8 @@ Page({
       // suspension performed in the admin console is reflected immediately.
       const account = await getApp().ensureAuth(true);
       const activeRole = account.activeRole || api.getActiveRole();
+      const teacherProfile = account.teacherProfile || {};
+      const teacherEligibility = api.getTeacherApplicationEligibility(teacherProfile);
       const type = activeRole === "TEACHER" ? "TEACHING_NEED" : "TEACHER_OFFER";
       const requests = [api.listAllJobs({ type })];
       if (activeRole === "TEACHER") requests.push(api.listTeacherApplications());
@@ -51,10 +56,13 @@ Page({
       const jobs = (result.items || []).map((item) => {
         const job = api.normalizeJob(item);
         const currentApplication = item.currentApplication || applicationByJob[item.id] || null;
-        return { ...job, currentApplication, actionLabel: this.applicationLabel(currentApplication) };
+        const canSubmitApplication = !currentApplication || currentApplication.status === "CANCELLED";
+        const actionLabel = activeRole === "TEACHER" && canSubmitApplication && !teacherEligibility.canApply
+          ? teacherEligibility.actionLabel
+          : this.applicationLabel(currentApplication);
+        return { ...job, currentApplication, actionLabel };
       });
       const parentProfile = account.parentProfile || {};
-      const teacherProfile = account.teacherProfile || {};
       const locationLabel = activeRole === "TEACHER"
         ? (teacherProfile.serviceDistricts || []).join("、") || "服务区域未设置"
         : [parentProfile.city, parentProfile.district].filter(Boolean).join(" · ") || "常用区域未设置";
@@ -68,6 +76,9 @@ Page({
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
         activeRole,
         roleName: activeRole === "TEACHER" ? "老师版" : "家长版",
+        teacherCanApply: teacherEligibility.canApply,
+        teacherApplicationAction: teacherEligibility.actionLabel,
+        teacherApplicationReason: teacherEligibility.reason,
         locationLabel,
         verificationLabel,
         jobs,
@@ -156,6 +167,7 @@ Page({
     const next = this.data.activeRole === "TEACHER" ? "PARENT" : "TEACHER";
     this.setData({ actionId: "role" });
     wx.showLoading({ title: "切换中" });
+    let toast;
     try {
       await api.switchRole(next);
       getApp().globalData.activeRole = next;
@@ -164,13 +176,14 @@ Page({
       await getApp().ensureAuth(true);
       this.resetFilters();
       await this.loadData(false);
-      wx.showToast({ title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" });
+      toast = { title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" };
     } catch (error) {
-      wx.showToast({ title: error.message || "切换失败", icon: "none" });
+      toast = { title: error.message || "切换失败", icon: "none" };
     } finally {
       wx.hideLoading();
       this.setData({ actionId: "" });
     }
+    wx.showToast(toast);
   },
 
   openDetail(event) {
@@ -187,6 +200,14 @@ Page({
     }
     if (job.currentApplication && job.currentApplication.status !== "CANCELLED") {
       wx.showToast({ title: job.actionLabel, icon: "none" });
+      return;
+    }
+    if (!this.data.teacherCanApply) {
+      if (this.data.teacherApplicationAction === "认证审核中") {
+        wx.showToast({ title: this.data.teacherApplicationReason, icon: "none" });
+      } else {
+        wx.navigateTo({ url: "/pages/teacher-profile/teacher-profile" });
+      }
       return;
     }
     wx.showModal({

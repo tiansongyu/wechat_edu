@@ -31,7 +31,7 @@
       <button wx:if="{{canManageApplications}}" class="detail-apply" bindtap="manageApplications">管理报名</button>
       <button wx:elif="{{isOwner}}" class="detail-apply" loading="{{action === 'role'}}" bindtap="openMyPosts">{{ownerRoleMismatch ? (ownerRole === 'TEACHER' ? '切换老师版管理' : '切换家长版管理') : '管理发布'}}</button>
       <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED' && currentApplication && currentApplication.status === 'ACCEPTED'}}" class="detail-apply" loading="{{action === 'contact'}}" bindtap="contactPublisher">联系发布人</button>
-      <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED'}}" class="detail-apply {{canApply ? '' : 'detail-apply--pending'}}" loading="{{action === 'apply'}}" bindtap="applyJob">{{currentApplication ? applicationLabel : (job.status === 'PUBLISHED' ? '立即申请' : job.statusLabel)}}</button>
+      <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED'}}" class="detail-apply {{canApply ? '' : 'detail-apply--pending'}}" loading="{{action === 'apply'}}" bindtap="applyJob">{{applicationActionLabel}}</button>
       <button wx:elif="{{viewerRoleMismatch}}" class="detail-apply" loading="{{action === 'role'}}" bindtap="switchViewerRole">{{expectedViewerRole === 'TEACHER' ? '切换老师版申请' : '切换家长版联系'}}</button>
       <button wx:else class="detail-apply {{canContact ? '' : 'detail-apply--pending'}}" loading="{{action === 'contact'}}" bindtap="contactPublisher">{{contactLabel}}</button>
     </view>

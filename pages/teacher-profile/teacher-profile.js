@@ -105,6 +105,7 @@ Page({
     const extension = String(file.name || "").split(".").pop().toLowerCase();
     const contentType = extension === "pdf" ? "application/pdf" : extension === "png" ? "image/png" : "image/jpeg";
     wx.showLoading({ title: "上传中" });
+    let toast;
     try {
       const signed = await api.createUploadUrl({ fileName: file.name, contentType, size: file.size });
       const binary = await new Promise((resolve, reject) => {
@@ -124,11 +125,12 @@ Page({
       getApp().globalData.account = null;
       getApp().globalData.authReady = null;
       await this.loadProfile();
-      wx.showToast({ title: "材料已上传", icon: "success" });
+      toast = { title: "材料已上传", icon: "success" };
     } catch (error) {
-      wx.showToast({ title: error.message || "上传失败", icon: "none" });
+      toast = { title: error.message || "上传失败", icon: "none" };
     } finally {
       wx.hideLoading();
     }
+    wx.showToast(toast);
   }
 });

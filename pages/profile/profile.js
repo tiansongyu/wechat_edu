@@ -145,6 +145,7 @@ Page({
     const next = this.data.activeRole === "TEACHER" ? "PARENT" : "TEACHER";
     this.setData({ actionId: "role" });
     wx.showLoading({ title: "切换中" });
+    let toast;
     try {
       await api.switchRole(next);
       getApp().globalData.activeRole = next;
@@ -153,13 +154,14 @@ Page({
       await getApp().ensureAuth(true);
       this.setData({ activePanel: "applications", showParentEditor: false, showSettings: false });
       await this.loadData(false);
-      wx.showToast({ title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" });
+      toast = { title: `已进入${next === "TEACHER" ? "老师" : "家长"}版`, icon: "none" };
     } catch (error) {
-      wx.showToast({ title: error.message || "切换失败", icon: "none" });
+      toast = { title: error.message || "切换失败", icon: "none" };
     } finally {
       wx.hideLoading();
       this.setData({ actionId: "" });
     }
+    wx.showToast(toast);
   },
 
   selectPanel(event) {

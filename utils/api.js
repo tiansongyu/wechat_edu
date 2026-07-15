@@ -227,6 +227,31 @@ function getTeacherProfile() {
   return request("/api/v1/profiles/teacher");
 }
 
+function getTeacherApplicationEligibility(profile = {}) {
+  if (profile && profile.auditStatus === "APPROVED") {
+    return { canApply: true, actionLabel: "立即申请", reason: "" };
+  }
+  if (profile && profile.auditStatus === "PENDING" && profile.submittedAt) {
+    return {
+      canApply: false,
+      actionLabel: "认证审核中",
+      reason: "教师认证正在审核，通过后即可报名"
+    };
+  }
+  if (profile && profile.auditStatus === "REJECTED") {
+    return {
+      canApply: false,
+      actionLabel: "修改教师认证",
+      reason: profile.auditNote || "教师认证未通过，请修改资料后重新提交"
+    };
+  }
+  return {
+    canApply: false,
+    actionLabel: "完善教师认证",
+    reason: "请先完善并提交教师认证资料"
+  };
+}
+
 function updateTeacherProfile(data) {
   return request("/api/v1/profiles/teacher", { method: "PATCH", data });
 }
@@ -302,6 +327,7 @@ module.exports = {
   getJob,
   getMineJobs,
   getPreferences,
+  getTeacherApplicationEligibility,
   getTeacherProfile,
   listAppointments,
   listAllJobs,

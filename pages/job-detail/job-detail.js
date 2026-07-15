@@ -11,6 +11,10 @@ Page({
     activeRole: "PARENT",
     currentApplication: null,
     applicationLabel: "",
+    applicationActionLabel: "立即申请",
+    teacherCanApply: false,
+    teacherApplicationAction: "完善教师认证",
+    teacherApplicationReason: "请先完善并提交教师认证资料",
     isOwner: false,
     ownerRole: "PARENT",
     expectedViewerRole: "TEACHER",
@@ -42,6 +46,7 @@ Page({
     try {
       const account = await getApp().ensureAuth();
       const activeRole = account.activeRole || api.getActiveRole();
+      const teacherEligibility = api.getTeacherApplicationEligibility(account.teacherProfile || {});
       const requests = [api.getJob(this.data.jobId)];
       if (activeRole === "TEACHER") requests.push(api.listTeacherApplications());
       const [rawJob, applications = []] = await Promise.all(requests);
@@ -58,11 +63,19 @@ Page({
       const viewerRoleMismatch = !isOwner && activeRole !== expectedViewerRole;
       const applicationLabel = currentApplication
         ? ({ PENDING: "申请审核中", ACCEPTED: "已被录用", REJECTED: "本次未选中", CANCELLED: "重新申请" }[currentApplication.status] || currentApplication.status)
-        : job.status === "PUBLISHED" ? "今天可申请" : job.statusLabel;
+        : job.status === "PUBLISHED"
+          ? (teacherEligibility.canApply ? "今天可申请" : teacherEligibility.actionLabel)
+          : job.statusLabel;
+      const applicationActionLabel = currentApplication && currentApplication.status !== "CANCELLED"
+        ? applicationLabel
+        : job.status === "PUBLISHED"
+          ? teacherEligibility.actionLabel
+          : job.statusLabel;
       const canApply = activeRole === "TEACHER"
         && job.type === "TEACHING_NEED"
         && job.status === "PUBLISHED"
         && !isOwner
+        && teacherEligibility.canApply
         && (!currentApplication || currentApplication.status === "CANCELLED");
       const canContact = !isOwner && (
         (job.type === "TEACHING_NEED" && activeRole === "TEACHER" && currentApplication && currentApplication.status === "ACCEPTED")
@@ -74,6 +87,10 @@ Page({
         job,
         currentApplication,
         applicationLabel,
+        applicationActionLabel,
+        teacherCanApply: teacherEligibility.canApply,
+        teacherApplicationAction: teacherEligibility.actionLabel,
+        teacherApplicationReason: teacherEligibility.reason,
         isOwner,
         ownerRole,
         expectedViewerRole,
@@ -106,6 +123,14 @@ Page({
     }
     if (this.data.currentApplication && this.data.currentApplication.status !== "CANCELLED") {
       wx.showToast({ title: this.data.applicationLabel, icon: "none" });
+      return;
+    }
+    if (!this.data.teacherCanApply) {
+      if (this.data.teacherApplicationAction === "认证审核中") {
+        wx.showToast({ title: this.data.teacherApplicationReason, icon: "none" });
+      } else {
+        wx.navigateTo({ url: "/pages/teacher-profile/teacher-profile" });
+      }
       return;
     }
     wx.showModal({
@@ -217,20 +242,23 @@ Page({
     if (this.data.action || this.data.activeRole === role) return true;
     this.setData({ action: "role" });
     wx.showLoading({ title: "切换中" });
+    let switched = false;
+    let errorMessage = "";
     try {
       await api.switchRole(role);
       getApp().globalData.activeRole = role;
       getApp().globalData.account = null;
       getApp().globalData.authReady = null;
       await getApp().ensureAuth(true);
-      return true;
+      switched = true;
     } catch (error) {
-      wx.showToast({ title: error.message || "角色切换失败", icon: "none" });
-      return false;
+      errorMessage = error.message || "角色切换失败";
     } finally {
       wx.hideLoading();
       this.setData({ action: "" });
     }
+    if (errorMessage) wx.showToast({ title: errorMessage, icon: "none" });
+    return switched;
   },
 
   async switchViewerRole() {

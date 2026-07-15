@@ -67,6 +67,44 @@ assert.equal(tabbar.data.items.length, 5);
 assert.equal(tabbar.data.items[2].key, "publish");
 
 const requestClient = require(path.join(root, "utils/request"));
+const apiClient = require(path.join(root, "utils/api"));
+assert.deepEqual(apiClient.getTeacherApplicationEligibility({ auditStatus: "APPROVED" }), {
+  canApply: true,
+  actionLabel: "立即申请",
+  reason: ""
+});
+assert.deepEqual(apiClient.getTeacherApplicationEligibility({ auditStatus: "PENDING", submittedAt: "2026-07-15T00:00:00Z" }), {
+  canApply: false,
+  actionLabel: "认证审核中",
+  reason: "教师认证正在审核，通过后即可报名"
+});
+assert.equal(apiClient.getTeacherApplicationEligibility({ auditStatus: "REJECTED" }).actionLabel, "修改教师认证");
+assert.equal(apiClient.getTeacherApplicationEligibility({}).actionLabel, "完善教师认证");
+
+const homePage = {
+  ...pages[0],
+  data: {
+    ...pages[0].data,
+    activeRole: "TEACHER",
+    teacherCanApply: false,
+    teacherApplicationAction: "完善教师认证",
+    teacherApplicationReason: "请先完善并提交教师认证资料",
+    jobs: [{ id: "job-needs-certification", currentApplication: null, actionLabel: "完善教师认证" }]
+  },
+  setData(update) { this.data = { ...this.data, ...update }; }
+};
+let navigatedTo = "";
+let applicationCalls = 0;
+const originalNavigateTo = wx.navigateTo;
+const originalApplyJob = apiClient.applyJob;
+wx.navigateTo = ({ url }) => { navigatedTo = url; };
+apiClient.applyJob = async () => { applicationCalls += 1; };
+homePage.applyJob.call(homePage, { currentTarget: { dataset: { id: "job-needs-certification" } } });
+assert.equal(navigatedTo, "/pages/teacher-profile/teacher-profile");
+assert.equal(applicationCalls, 0, "an unapproved teacher must not send an application request");
+wx.navigateTo = originalNavigateTo;
+apiClient.applyJob = originalApplyJob;
+
 const firstDeviceId = requestClient.getDeviceId();
 assert.equal(requestClient.getDeviceId(), firstDeviceId);
 assert.ok(storage.has(requestClient.DEVICE_KEY));
@@ -84,7 +122,7 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0].method, "POST");
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
-    console.log("Smoke checks passed: database-only client flows, valid empty JSON writes, 9 pages, stable session identity, and native tab bar.");
+    console.log("Smoke checks passed: database-only client flows, teacher application eligibility, valid empty JSON writes, 9 pages, stable session identity, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);
