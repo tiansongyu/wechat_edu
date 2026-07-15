@@ -79,7 +79,7 @@
 
         <view class="application-card__facts">
           <text class="application-fact">{{item.teachingLabel}}</text>
-          <text class="application-fact" wx:if="{{item.scoreLabel}}">{{item.scoreLabel}}</text>
+          <text class="application-fact application-fact--reviews" data-teacher-id="{{item.teacherId}}" catchtap="openTeacherReviews">{{item.reviewLabel}} ›</text>
           <text class="application-fact">报名于 {{item.createdLabel}}</text>
         </view>
 

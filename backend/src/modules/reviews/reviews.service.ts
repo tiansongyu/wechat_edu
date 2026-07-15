@@ -8,8 +8,10 @@ import {
 } from "@nestjs/common";
 import { RequestUser } from "../../common/interfaces/request-user";
 import {
+  AccountStatus,
   ApplicationStatus,
   AppointmentStatus,
+  AuditStatus,
   ReviewStatus,
   RoleCode
 } from "../../generated/prisma/enums";
@@ -45,6 +47,9 @@ type NormalizedReview = {
   content: string | null;
   requestHash: string;
 };
+
+type ReviewVisibility = "PUBLIC_TEACHER" | "SELF_FULL" | "APPOINTMENT_PARTICIPANT_SUMMARY";
+type ReviewPartyRole = typeof RoleCode.PARENT | typeof RoleCode.TEACHER;
 
 @Injectable()
 export class ReviewsService {
@@ -175,15 +180,132 @@ export class ReviewsService {
     if (!revieweeRole) throw new BadRequestException("请明确指定评价身份 role=TEACHER");
     if (revieweeRole === RoleCode.PARENT) throw new NotFoundException("评价记录不存在");
     if (revieweeRole !== RoleCode.TEACHER) throw new BadRequestException("评价身份只能是老师");
-    const account = await this.prisma.account.findUnique({ where: { id: accountId }, select: { id: true } });
-    if (!account) throw new NotFoundException("用户不存在");
+    return this.listTeacherReviews(accountId, cursor, limit);
+  }
 
-    const where = {
-      revieweeId: accountId,
-      revieweeRole,
-      status: ReviewStatus.PUBLISHED,
-      appointment: { status: AppointmentStatus.COMPLETED }
-    } as const;
+  async listTeacherReviews(teacherId: string, cursor?: string, limit = 20) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: teacherId },
+      select: {
+        id: true,
+        status: true,
+        roles: {
+          where: { roleCode: RoleCode.TEACHER },
+          select: { roleCode: true }
+        },
+        teacherProfile: { select: { auditStatus: true } }
+      }
+    });
+    if (
+      !account ||
+      account.status !== AccountStatus.ACTIVE ||
+      !account.roles.length ||
+      account.teacherProfile?.auditStatus !== AuditStatus.APPROVED
+    ) {
+      throw this.reviewProfileNotFound();
+    }
+    return this.listRoleReviews(teacherId, RoleCode.TEACHER, "PUBLIC_TEACHER", cursor, limit);
+  }
+
+  async listReceivedReviews(user: RequestUser, cursor?: string, limit = 20) {
+    if (
+      (user.activeRole !== RoleCode.PARENT && user.activeRole !== RoleCode.TEACHER) ||
+      !user.roles.includes(user.activeRole)
+    ) {
+      throw new ForbiddenException("当前身份不能查看收到的评价");
+    }
+    return this.listRoleReviews(user.id, user.activeRole, "SELF_FULL", cursor, limit);
+  }
+
+  async getCounterpartReputation(user: RequestUser, appointmentId: string) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: {
+        status: true,
+        job: { select: { ownerId: true } },
+        application: { select: { teacherId: true, status: true } }
+      }
+    });
+    if (!appointment) throw this.appointmentNotFound();
+
+    const isParent = appointment.job.ownerId === user.id;
+    const isTeacher = appointment.application.teacherId === user.id;
+    if (!isParent && !isTeacher) throw this.appointmentNotFound();
+
+    const requiredRole = isParent ? RoleCode.PARENT : RoleCode.TEACHER;
+    if (user.activeRole !== requiredRole || !user.roles.includes(requiredRole)) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: "ROLE_SWITCH_REQUIRED",
+        message: "请切换到该预约对应的身份后查看对方评价",
+        requiredRole
+      });
+    }
+    if (
+      appointment.status === AppointmentStatus.CANCELLED ||
+      appointment.application.status !== ApplicationStatus.ACCEPTED
+    ) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: "REPUTATION_CONTEXT_UNAVAILABLE",
+        message: "当前预约状态不能查看对方评价"
+      });
+    }
+
+    const targetRole = isParent ? RoleCode.TEACHER : RoleCode.PARENT;
+    const targetId = isParent ? appointment.application.teacherId : appointment.job.ownerId;
+    const summaryPromise = this.loadRoleSummary(targetId, targetRole);
+
+    if (targetRole === RoleCode.TEACHER) {
+      return {
+        visibility: "APPOINTMENT_PARTICIPANT_SUMMARY" as ReviewVisibility,
+        targetRole,
+        summary: await summaryPromise
+      };
+    }
+
+    const [summary, ownReview] = await Promise.all([
+      summaryPromise,
+      this.prisma.review.findFirst({
+        where: {
+          appointmentId,
+          reviewerId: user.id,
+          revieweeId: targetId,
+          reviewerRole: RoleCode.TEACHER,
+          revieweeRole: RoleCode.PARENT
+        },
+        select: {
+          id: true,
+          reviewerRole: true,
+          revieweeRole: true,
+          rating: true,
+          tags: true,
+          content: true,
+          status: true,
+          createdAt: true
+        }
+      })
+    ]);
+    return {
+      visibility: "APPOINTMENT_PARTICIPANT_SUMMARY" as ReviewVisibility,
+      targetRole,
+      summary,
+      myReview: ownReview ? this.presentContextOwnReview(ownReview) : null
+    };
+  }
+
+  private async listRoleReviews(
+    accountId: string,
+    revieweeRole: ReviewPartyRole,
+    visibility: Exclude<ReviewVisibility, "APPOINTMENT_PARTICIPANT_SUMMARY">,
+    cursor?: string,
+    limit = 20
+  ) {
+    const where = this.roleReviewWhere(accountId, revieweeRole);
+    if (cursor) {
+      const validCursor = await this.prisma.review.findFirst({ where: { ...where, id: cursor }, select: { id: true } });
+      if (!validCursor) throw new BadRequestException("评价游标无效或不属于当前评价列表");
+    }
     const [reviews, grouped] = await Promise.all([
       this.prisma.review.findMany({
         where,
@@ -207,6 +329,50 @@ export class ReviewsService {
       })
     ]);
 
+    const hasMore = reviews.length > limit;
+    const page = hasMore ? reviews.slice(0, limit) : reviews;
+    return {
+      visibility,
+      targetRole: revieweeRole,
+      items: page.map((review) => ({
+        id: review.id,
+        reviewerRole: review.reviewerRole,
+        reviewerLabel: review.reviewerRole === RoleCode.PARENT ? "本次合作家长" : "本次合作老师",
+        revieweeRole: review.revieweeRole,
+        rating: review.rating,
+        tags: review.tags,
+        content: review.content,
+        createdAt: review.createdAt
+      })),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+      summary: this.buildSummary(grouped)
+    };
+  }
+
+  private async loadRoleSummary(accountId: string, revieweeRole: ReviewPartyRole) {
+    const grouped = await this.prisma.review.groupBy({
+      by: ["rating"],
+      where: this.roleReviewWhere(accountId, revieweeRole),
+      _count: { _all: true }
+    });
+    return this.buildSummary(grouped);
+  }
+
+  private roleReviewWhere(accountId: string, revieweeRole: ReviewPartyRole) {
+    return {
+      revieweeId: accountId,
+      revieweeRole,
+      reviewerRole: this.oppositeRole(revieweeRole),
+      status: ReviewStatus.PUBLISHED,
+      appointment: { status: AppointmentStatus.COMPLETED }
+    } as const;
+  }
+
+  private oppositeRole(role: ReviewPartyRole) {
+    return role === RoleCode.TEACHER ? RoleCode.PARENT : RoleCode.TEACHER;
+  }
+
+  private buildSummary(grouped: Array<{ rating: number; _count: { _all: number } }>) {
     const distribution: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let weightedTotal = 0;
     let count = 0;
@@ -220,29 +386,13 @@ export class ReviewsService {
     }
     const average = count ? Number((weightedTotal / count).toFixed(2)) : null;
     const level = this.reputationLevel(count, average);
-
-    const hasMore = reviews.length > limit;
-    const page = hasMore ? reviews.slice(0, limit) : reviews;
     return {
-      items: page.map((review) => ({
-        id: review.id,
-        reviewerRole: review.reviewerRole,
-        reviewerLabel: review.reviewerRole === RoleCode.PARENT ? "本次合作家长" : "本次合作老师",
-        revieweeRole: review.revieweeRole,
-        rating: review.rating,
-        tags: review.tags,
-        content: review.content,
-        createdAt: review.createdAt
-      })),
-      nextCursor: hasMore ? page[page.length - 1].id : null,
-      summary: {
-        displayAverage: count >= 3 ? average : null,
-        count,
-        distribution,
-        level: level.code,
-        levelLabel: level.label,
-        algorithmVersion: REVIEW_ALGORITHM_VERSION
-      }
+      displayAverage: count >= 3 ? average : null,
+      count,
+      distribution,
+      level: level.code,
+      levelLabel: level.label,
+      algorithmVersion: REVIEW_ALGORITHM_VERSION
     };
   }
 
@@ -333,6 +483,35 @@ export class ReviewsService {
       ({ pattern }) => pattern.test(normalizedProbe) || pattern.test(compactProbe)
     );
     if (matched) throw new BadRequestException(`评价中不能包含${matched.label}等联系方式或隐私信息`);
+  }
+
+  private reviewProfileNotFound() {
+    return new NotFoundException({
+      statusCode: 404,
+      code: "REVIEW_PROFILE_NOT_FOUND",
+      message: "评价资料不存在"
+    });
+  }
+
+  private appointmentNotFound() {
+    return new NotFoundException({
+      statusCode: 404,
+      code: "APPOINTMENT_NOT_FOUND",
+      message: "预约不存在"
+    });
+  }
+
+  private presentContextOwnReview(review: any) {
+    return {
+      id: review.id,
+      reviewerRole: review.reviewerRole,
+      revieweeRole: review.revieweeRole,
+      rating: review.rating,
+      tags: review.tags,
+      content: review.content,
+      status: review.status,
+      createdAt: review.createdAt instanceof Date ? review.createdAt.toISOString() : review.createdAt
+    };
   }
 
   private presentOwnReview(review: any) {

@@ -136,6 +136,7 @@
 
 .publisher-card__main {
   flex: 1;
+  min-width: 0;
 }
 
 .publisher-card__name-row {
@@ -165,8 +166,31 @@
   font-size: 18rpx;
 }
 
+.publisher-card__reviews {
+  display: flex;
+  align-items: center;
+  min-height: 80rpx;
+  margin-top: 7rpx;
+  color: #b27a18;
+  font-size: 20rpx;
+  font-weight: 600;
+}
+
+.publisher-card__reviews text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .publisher-card__contact {
-  padding: 10rpx 17rpx;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 88rpx;
+  height: 80rpx;
+  margin-left: 12rpx;
+  padding: 0 17rpx;
   color: #3478f6;
   font-size: 20rpx;
   background: #edf4ff;

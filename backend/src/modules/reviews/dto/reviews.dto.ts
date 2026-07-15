@@ -22,10 +22,7 @@ export class CreateReviewDto {
   content?: string;
 }
 
-export class ListReviewsDto {
-  @IsIn([RoleCode.PARENT, RoleCode.TEACHER])
-  role: RoleCode;
-
+export class ReviewPaginationDto {
   @IsOptional()
   @IsUUID()
   cursor?: string;
@@ -36,4 +33,9 @@ export class ListReviewsDto {
   @Min(1)
   @Max(100)
   limit = 20;
+}
+
+export class ListReviewsDto extends ReviewPaginationDto {
+  @IsIn([RoleCode.PARENT, RoleCode.TEACHER])
+  role: RoleCode;
 }

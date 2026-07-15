@@ -8,7 +8,8 @@
     "pages/teacher-profile/teacher-profile",
     "pages/job-detail/job-detail",
     "pages/job-applications/job-applications",
-    "pages/conversation/conversation"
+    "pages/conversation/conversation",
+    "pages/reviews/reviews"
   ],
   "window": {
     "navigationBarBackgroundColor": "#f6f7fb",

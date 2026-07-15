@@ -45,6 +45,9 @@ for (const field of ["parentCompletedAt", "teacherCompletedAt", "completedAt", "
   assert.ok(reviewsMigration.includes(field), `completion/reviews migration should persist ${field}`);
 }
 assert.match(reviewsMigration, /UNIQUE INDEX "reviews_appointmentId_reviewerId_key"/);
+const reviewRoleIndexMigration = read("backend/prisma/migrations/202607160007_review_role_index/migration.sql");
+assert.match(reviewRoleIndexMigration, /reviews_revieweeId_revieweeRole_status_createdAt_idx/);
+assert.match(schema, /@@index\(\[revieweeId, revieweeRole, status, createdAt\(sort: Desc\)\]\)/);
 const authService = read("backend/src/modules/auth/auth.service.ts");
 assert.match(authService, /api\.weixin\.qq\.com\/sns\/jscode2session/);
 assert.match(authService, /deviceIdHash/);

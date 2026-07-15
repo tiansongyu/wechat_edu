@@ -286,7 +286,7 @@ model Review {
   reviewee      Account      @relation("ReviewRecipient", fields: [revieweeId], references: [id], onDelete: Restrict)
 
   @@unique([appointmentId, reviewerId])
-  @@index([revieweeId, status, createdAt(sort: Desc)])
+  @@index([revieweeId, revieweeRole, status, createdAt(sort: Desc)])
   @@map("reviews")
 }
 

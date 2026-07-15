@@ -333,6 +333,71 @@ assert.equal(firstAppointmentForTeacher.canReview, false);
 assert.equal(firstAppointmentForTeacher.myReview.id, teacherReview.id);
 assert.equal(firstAppointmentForTeacher.reviewTarget.role, "PARENT");
 
+const publicTeacherReviews = await request(
+  "GET /api/v1/teachers/:teacherId/reviews",
+  `/api/v1/teachers/${teacher.account.id}/reviews`,
+  { token: outsider.accessToken }
+);
+assert.equal(publicTeacherReviews.visibility, "PUBLIC_TEACHER");
+assert.equal(publicTeacherReviews.targetRole, "TEACHER");
+assert.equal(publicTeacherReviews.summary.count, 1);
+assert.equal(Object.hasOwn(publicTeacherReviews.items[0], "reviewerId"), false);
+assert.equal(Object.hasOwn(publicTeacherReviews.items[0], "appointmentId"), false);
+assert.equal(JSON.stringify(publicTeacherReviews).includes(parents[0].account.id), false);
+await expectStatus(404, `/api/v1/teachers/${outsider.account.id}/reviews`, {
+  token: parents[0].accessToken
+});
+
+const ownTeacherReviews = await request(
+  "GET /api/v1/me/reviews/received",
+  "/api/v1/me/reviews/received",
+  { token: teacher.accessToken }
+);
+assert.equal(ownTeacherReviews.visibility, "SELF_FULL");
+assert.equal(ownTeacherReviews.targetRole, "TEACHER");
+assert.equal(ownTeacherReviews.summary.count, 1);
+
+const ownParentReviews = await request(
+  "GET /api/v1/me/reviews/received",
+  "/api/v1/me/reviews/received",
+  { token: parents[0].accessToken }
+);
+assert.equal(ownParentReviews.targetRole, "PARENT");
+assert.equal(ownParentReviews.summary.count, 1);
+assert.equal(ownParentReviews.items[0].reviewerLabel, "本次合作老师");
+
+const teacherCounterpart = await request(
+  "GET /api/v1/appointments/:id/counterpart-reputation",
+  `/api/v1/appointments/${firstAppointment.id}/counterpart-reputation`,
+  { token: teacher.accessToken }
+);
+assert.equal(teacherCounterpart.visibility, "APPOINTMENT_PARTICIPANT_SUMMARY");
+assert.equal(teacherCounterpart.targetRole, "PARENT");
+assert.equal(teacherCounterpart.summary.count, 1);
+assert.equal(teacherCounterpart.myReview.id, teacherReview.id);
+assert.equal(Object.hasOwn(teacherCounterpart, "items"), false);
+
+const parentCounterpart = await request(
+  "GET /api/v1/appointments/:id/counterpart-reputation",
+  `/api/v1/appointments/${firstAppointment.id}/counterpart-reputation`,
+  { token: parents[0].accessToken }
+);
+assert.equal(parentCounterpart.targetRole, "TEACHER");
+assert.equal(parentCounterpart.summary.count, 1);
+assert.equal(Object.hasOwn(parentCounterpart, "items"), false);
+
+await expectStatus(404, `/api/v1/appointments/${firstAppointment.id}/counterpart-reputation`, {
+  token: outsider.accessToken
+});
+const teacherWithWrongRole = await switchRole(teacher, "PARENT");
+const wrongRoleCounterpart = await expectStatus(
+  403,
+  `/api/v1/appointments/${firstAppointment.id}/counterpart-reputation`,
+  { token: teacherWithWrongRole.accessToken }
+);
+assert.equal(wrongRoleCounterpart.code, "ROLE_SWITCH_REQUIRED");
+assert.equal(wrongRoleCounterpart.requiredRole, "TEACHER");
+
 let teacherReviews = await request(
   "GET /api/v1/accounts/:accountId/reviews",
   `/api/v1/accounts/${teacher.account.id}/reviews?role=TEACHER`,
@@ -416,6 +481,9 @@ const expected = [
   "POST /api/v1/appointments/:id/complete",
   "POST /api/v1/appointments/:id/reviews",
   "GET /api/v1/accounts/:accountId/reviews",
+  "GET /api/v1/teachers/:teacherId/reviews",
+  "GET /api/v1/me/reviews/received",
+  "GET /api/v1/appointments/:id/counterpart-reputation",
   "POST /api/v1/appointments/:id/dispute",
   "GET /api/v1/notifications"
 ];

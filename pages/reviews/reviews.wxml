@@ -1,0 +1,69 @@
+<view class="reviews-page">
+  <view class="review-state" wx:if="{{loading}}">
+    <view class="review-spinner"></view>
+    <text>正在整理真实合作评价...</text>
+  </view>
+  <view class="review-state" wx:elif="{{error}}">
+    <view class="review-state__emoji">☁</view>
+    <text class="review-state__title">评价暂时走丢了</text>
+    <text class="review-state__copy">{{error}}</text>
+    <button bindtap="retry">重新加载</button>
+  </view>
+  <block wx:else>
+    <view class="review-hero">
+      <view class="review-hero__glow"></view>
+      <view class="review-hero__top"><text class="review-hero__eyebrow">真实履约 · 双向反馈</text><text class="review-hero__badge">{{summary.levelLabel}}</text></view>
+      <view class="review-hero__score-row">
+        <text class="review-hero__score">{{summary.displayAverage !== null ? summary.displayAverage : '新'}}</text>
+        <view class="review-hero__score-copy"><text>{{summary.displayAverage !== null ? '综合星级' : '评价积累中'}}</text><text>来自 {{summary.count}} 次已完成合作</text></view>
+      </view>
+      <text class="review-hero__privacy">只展示合作身份，不公开评价人的昵称和头像</text>
+    </view>
+
+    <view class="review-content">
+      <view class="reputation-alert" wx:if="{{reputationError}}">
+        <view class="reputation-alert__icon">!</view><view class="reputation-alert__main"><text class="reputation-alert__title">对方口碑暂不可见</text><text class="reputation-alert__copy">{{reputationError}}</text></view>
+        <button wx:if="{{requiredRole}}" loading="{{switchingRole}}" disabled="{{switchingRole}}" bindtap="switchRequiredRole">切换{{requiredRole === 'TEACHER' ? '老师' : '家长'}}版</button>
+        <button wx:elif="{{reputationRetryable}}" bindtap="retry">重试</button>
+      </view>
+      <view class="review-form" wx:if="{{appointment && appointment.canReview && !submittedReview}}">
+        <view class="section-heading"><view><text class="section-heading__title">这次合作怎么样？</text><text class="section-heading__copy">你的认真反馈，会帮助下一次匹配更合适</text></view><text class="section-heading__flower">✿</text></view>
+        <view class="star-picker">
+          <view class="star-picker__item" wx:for="{{stars}}" wx:key="*this" data-rating="{{item}}" bindtap="selectRating"><text class="{{item <= rating ? 'star-picker__star--active' : ''}}">★</text></view>
+        </view>
+        <text class="rating-hint">{{ratingHint}}</text>
+
+        <text class="review-form__label">选择印象标签 <text>最多5个</text></text>
+        <view class="tag-picker"><text wx:for="{{tagOptions}}" wx:key="label" class="tag-chip {{item.selected ? 'tag-chip--active' : ''}}" data-label="{{item.label}}" bindtap="toggleTag">{{item.selected ? '✓ ' : ''}}{{item.label}}</text></view>
+
+        <view class="review-form__label-row"><text class="review-form__label">补充评价</text><text class="review-form__count">{{contentLength}} / 500</text></view>
+        <textarea class="review-textarea" maxlength="500" value="{{content}}" disabled="{{submitting}}" placeholder="说说本次沟通、守约或授课体验吧（请勿填写联系方式）" placeholder-class="review-textarea__placeholder" bindinput="handleContentInput" />
+        <view class="review-guidance"><text>🛡</text><text>1至2星需填写至少10个非空白字；内容会经过隐私信息检查。</text></view>
+        <text class="review-form__error" wx:if="{{formError}}">{{formError}}</text>
+        <button class="review-submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitReview">{{submitting ? '正在安全提交...' : '提交真实评价'}}</button>
+      </view>
+
+      <view class="review-success" wx:if="{{submittedReview}}">
+        <view class="review-success__icon">✓</view>
+        <view class="review-success__main"><text class="review-success__title">谢谢你的认真反馈</text><text class="review-success__copy">评价已经保存，双方的每次真诚合作都在让平台变得更可靠。</text></view>
+        <text class="review-success__rating">{{submittedReview.rating}} 星</text>
+      </view>
+
+      <view class="review-waiting" wx:if="{{appointment && !appointment.canReview && !submittedReview}}">
+        <text class="review-waiting__icon">⏳</text><view><text class="review-waiting__title">还不能评价这次合作</text><text class="review-waiting__copy">需要家长和老师都确认完成，且预约没有争议。</text></view>
+      </view>
+
+      <view class="review-list-card">
+        <view class="section-heading"><view><text class="section-heading__title">{{receivedMode ? '我收到的评价' : targetRole === 'TEACHER' ? '老师的合作口碑' : '合作评价概览'}}</text><text class="section-heading__copy">评价只来自平台内已完成的真实预约</text></view><text class="review-count">{{summary.count}} 条</text></view>
+        <view class="review-context-summary" wx:if="{{appointment && targetRole === 'PARENT'}}"><text>🔐</text><text>为保护家长隐私，预约参与者可查看真实星级汇总，逐条评价内容不公开。</text></view>
+        <view class="review-item" wx:for="{{reviews}}" wx:key="id">
+          <view class="review-item__head"><view><text class="review-item__author">{{item.reviewerLabel}}</text><view class="review-item__stars"><text wx:for="{{item.stars}}" wx:for-item="star" wx:key="value" class="{{star.filled ? 'is-filled' : ''}}">★</text></view></view><text class="review-item__date">{{item.createdLabel}}</text></view>
+          <view class="review-item__tags" wx:if="{{item.tags.length}}"><text wx:for="{{item.tags}}" wx:key="*this">{{item}}</text></view>
+          <text class="review-item__content">{{item.content}}</text>
+        </view>
+        <view class="review-empty" wx:if="{{!reviews.length && !(appointment && targetRole === 'PARENT')}}"><view class="review-empty__planet">✦</view><text class="review-empty__title">第一颗评价星星还在路上</text><text class="review-empty__copy">完成合作并由双方确认后，就能留下真实评价。</text></view>
+        <button class="load-more" wx:if="{{nextCursor}}" loading="{{loadingMore}}" disabled="{{loadingMore}}" bindtap="loadMore">{{loadingMore ? '加载中...' : '查看更多评价'}}</button>
+      </view>
+    </view>
+  </block>
+</view>

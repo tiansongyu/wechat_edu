@@ -12,7 +12,7 @@
       <view class="publisher-card">
         <image wx:if="{{job.publisherAvatar}}" class="publisher-card__avatar publisher-card__avatar--image" src="{{job.publisherAvatar}}" mode="aspectFill" />
         <view wx:else class="publisher-card__avatar">{{job.publisherInitial}}</view>
-        <view class="publisher-card__main"><view class="publisher-card__name-row"><text class="publisher-card__name">{{job.publisher}}</text><text class="publisher-card__verified">{{job.typeLabel}}</text></view><text class="publisher-card__role">{{job.createdLabel ? job.createdLabel + '发布' : '发布时间以平台记录为准'}}</text></view>
+        <view class="publisher-card__main"><view class="publisher-card__name-row"><text class="publisher-card__name">{{job.publisher}}</text><text class="publisher-card__verified">{{job.typeLabel}}</text></view><text class="publisher-card__role">{{job.createdLabel ? job.createdLabel + '发布' : '发布时间以平台记录为准'}}</text><view wx:if="{{job.type === 'TEACHER_OFFER'}}" class="publisher-card__reviews" bindtap="openPublisherReviews"><text wx:if="{{publisherReviewSummary}}">{{publisherReviewSummary.displayAverage !== null ? '★ ' + publisherReviewSummary.displayAverage : '☆ 评价积累中'}} · {{publisherReviewSummary.count}} 条真实合作评价 ›</text><text wx:elif="{{publisherReviewLoading}}">正在加载老师口碑...</text><text wx:else>{{publisherReviewError || '查看老师真实合作评价'}} ›</text></view></view>
         <view class="publisher-card__contact" bindtap="contactPublisher">{{publisherActionLabel}}</view>
       </view>
       <view class="detail-card">

@@ -195,6 +195,37 @@ function updateAppointment(id, action, note = "") {
   return request(`/api/v1/appointments/${id}/${action}`, { method: "POST", data: { reason: note } });
 }
 
+function createReview(appointmentId, data, idempotencyKey) {
+  const key = idempotencyKey || `review-${getDeviceId()}-${appointmentId}-${uuidV4()}`;
+  return request(`/api/v1/appointments/${appointmentId}/reviews`, {
+    method: "POST",
+    data: {
+      rating: Number(data.rating),
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      content: String(data.content || "").trim() || undefined
+    },
+    header: { "Idempotency-Key": key }
+  });
+}
+
+function listTeacherReviews(accountId, params = {}) {
+  return request(`/api/v1/teachers/${accountId}/reviews${queryString({
+    cursor: params.cursor,
+    limit: params.limit
+  })}`);
+}
+
+function listMyReceivedReviews(params = {}) {
+  return request(`/api/v1/me/reviews/received${queryString({
+    cursor: params.cursor,
+    limit: params.limit
+  })}`);
+}
+
+function getCounterpartReputation(appointmentId) {
+  return request(`/api/v1/appointments/${appointmentId}/counterpart-reputation`);
+}
+
 function listNotifications() {
   return request("/api/v1/notifications");
 }
@@ -328,6 +359,7 @@ module.exports = {
   cancelApplication,
   closeJob,
   createJob,
+  createReview,
   createUploadUrl,
   ensureLogin,
   favoriteJob,
@@ -337,6 +369,7 @@ module.exports = {
   getJob,
   getMineJobs,
   getPreferences,
+  getCounterpartReputation,
   getTeacherApplicationEligibility,
   getTeacherProfile,
   listAppointments,
@@ -347,8 +380,10 @@ module.exports = {
   listFavoriteJobs,
   listJobs,
   listNotifications,
+  listMyReceivedReviews,
   listParentApplications,
   listTeacherApplications,
+  listTeacherReviews,
   logout,
   markAllNotificationsRead,
   markConversationRead,

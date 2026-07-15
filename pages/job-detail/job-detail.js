@@ -24,7 +24,10 @@ Page({
     canContact: false,
     canManageApplications: false,
     contactLabel: "联系发布人",
-    publisherActionLabel: "联系"
+    publisherActionLabel: "联系",
+    publisherReviewSummary: null,
+    publisherReviewError: "",
+    publisherReviewLoading: false
   },
 
   onLoad(options) {
@@ -101,9 +104,15 @@ Page({
         canManageApplications: isOwner && activeRole === "PARENT" && job.type === "TEACHING_NEED",
         contactLabel: job.type === "TEACHER_OFFER" ? "联系老师" : "联系发布人",
         publisherActionLabel: isOwner ? "管理" : viewerRoleMismatch ? "切换" : "联系",
+        publisherReviewSummary: null,
+        publisherReviewError: "",
+        publisherReviewLoading: job.type === "TEACHER_OFFER",
         loading: false,
         error: ""
       });
+      if (job.type === "TEACHER_OFFER" && job.owner && job.owner.id) {
+        this.loadPublisherReview(job.owner.id);
+      }
       wx.setNavigationBarTitle({ title: job.title.slice(0, 12) });
     } catch (error) {
       this.setData({ loading: false, error: error.message || "详情加载失败", job: null });
@@ -111,6 +120,17 @@ Page({
   },
 
   retry() { this.loadData(); },
+
+  async loadPublisherReview(teacherId) {
+    try {
+      const reviewResult = await api.listTeacherReviews(teacherId, { limit: 3 });
+      if (!this.data.job || !this.data.job.owner || this.data.job.owner.id !== teacherId) return;
+      this.setData({ publisherReviewSummary: reviewResult.summary || null, publisherReviewError: "", publisherReviewLoading: false });
+    } catch (error) {
+      if (!this.data.job || !this.data.job.owner || this.data.job.owner.id !== teacherId) return;
+      this.setData({ publisherReviewSummary: null, publisherReviewError: error.message || "老师口碑暂时加载失败", publisherReviewLoading: false });
+    }
+  },
 
   applyJob() {
     if (this.data.activeRole !== "TEACHER") {
@@ -236,6 +256,12 @@ Page({
     const job = this.data.job;
     if (!job || !this.data.canManageApplications) return;
     wx.navigateTo({ url: `/pages/job-applications/job-applications?jobId=${job.id}&title=${encodeURIComponent(job.title)}` });
+  },
+
+  openPublisherReviews() {
+    const job = this.data.job;
+    if (!job || job.type !== "TEACHER_OFFER" || !job.owner || !job.owner.id) return;
+    wx.navigateTo({ url: `/pages/reviews/reviews?accountId=${job.owner.id}` });
   },
 
   async switchRoleAndReload(role) {

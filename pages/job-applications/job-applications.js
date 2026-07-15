@@ -67,9 +67,6 @@ function normalizeApplications(response) {
       schoolLine: schoolLine || "教育经历尚未补充",
       teachingLabel: teachingYears > 0 ? `${teachingYears} 年教学经验` : "教学经验尚未补充",
       subjects,
-      scoreLabel: profile.score !== undefined && profile.score !== null && Number.isFinite(Number(profile.score))
-        ? `信誉分 ${Number(profile.score)}`
-        : "",
       auditLabel: auditMeta,
       bio: profile.bio || "",
       coverLetter: application.coverLetter || "",
@@ -144,7 +141,22 @@ Page({
     try {
       await getApp().ensureAuth();
       const response = await api.listParentApplications(this.data.jobId);
-      const applications = normalizeApplications(response);
+      const normalizedApplications = normalizeApplications(response);
+      const applications = await Promise.all(normalizedApplications.map(async (application) => {
+        if (!application.teacherId) return { ...application, reviewLabel: "口碑暂不可用" };
+        try {
+          const result = await api.listTeacherReviews(application.teacherId, { limit: 1 });
+          const summary = result.summary || { displayAverage: null, count: 0 };
+          return {
+            ...application,
+            reviewLabel: summary.displayAverage !== null
+              ? `${summary.displayAverage}★ · ${summary.count}条评价`
+              : `评价积累中 · ${summary.count}条`
+          };
+        } catch (error) {
+          return { ...application, reviewLabel: "口碑暂不可用" };
+        }
+      }));
       this.setData({
         applications,
         stats: buildStats(applications),
@@ -247,5 +259,11 @@ Page({
     } finally {
       this.setData({ actionId: "", actionType: "" });
     }
+  },
+
+  openTeacherReviews(event) {
+    const teacherId = String(event.currentTarget.dataset.teacherId || "");
+    if (!teacherId) return;
+    wx.navigateTo({ url: `/pages/reviews/reviews?accountId=${teacherId}` });
   }
 });

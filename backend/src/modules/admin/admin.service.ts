@@ -64,7 +64,7 @@ export class AdminService {
           loginCount: true,
           createdAt: true,
           roles: { select: { roleCode: true } },
-          teacherProfile: { select: { auditStatus: true, score: true } }
+          teacherProfile: { select: { auditStatus: true } }
         },
         orderBy: { createdAt: "desc" },
         skip: (query.page - 1) * query.pageSize,

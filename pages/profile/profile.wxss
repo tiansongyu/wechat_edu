@@ -198,7 +198,7 @@
 
 .credit-card__eyebrow {
   color: rgba(255, 255, 255, 0.66);
-  font-size: 19rpx;
+  font-size: 20rpx;
 }
 
 .credit-card__score-row {
@@ -253,7 +253,7 @@
   display: block;
   margin-top: 12rpx;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 17rpx;
+  font-size: 20rpx;
 }
 
 .profile-content {
@@ -404,14 +404,14 @@
 .profile-item__meta {
   margin-top: 7rpx;
   color: #979daa;
-  font-size: 18rpx;
+  font-size: 20rpx;
 }
 
 .profile-item__status {
   margin-left: 12rpx;
   padding: 7rpx 12rpx;
   color: #d78b25;
-  font-size: 17rpx;
+  font-size: 20rpx;
   background: #fff6e8;
   border-radius: 10rpx;
 }
@@ -540,7 +540,7 @@
 }
 
 .profile-avatar--image { padding: 0; overflow: hidden; }.audit-note { display: block; margin-top: 10rpx; color: #ffe1d9; font-size: 19rpx; }.profile-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 420rpx; padding: 40rpx; color: #7d8798; font-size: 24rpx; text-align: center; }.profile-state__title { margin-bottom: 12rpx; color: #27334a; font-size: 31rpx; font-weight: 700; }.profile-state button { margin-top: 26rpx; color: #fff; font-size: 23rpx; background: #3478f6; border-radius: 999rpx; }.profile-spinner { width: 44rpx; height: 44rpx; margin-bottom: 18rpx; border: 5rpx solid #dce6f8; border-top-color: #3478f6; border-radius: 50%; animation: profile-spin 800ms linear infinite; } @keyframes profile-spin { to { transform: rotate(360deg); } }
-.stats-scroll { width: 100%; }.stats-card--four { min-width: 650rpx; }.stats-card--four .stat-item { min-width: 150rpx; }.profile-item { flex-wrap: wrap; }.profile-item__note { display: block; margin-top: 6rpx; color: #b05c4d; font-size: 19rpx; }.inline-danger { width: auto; height: 48rpx; margin: 10rpx 0 0 88rpx; padding: 0 20rpx; color: #c65353; font-size: 19rpx; line-height: 48rpx; background: #fff0f0; border-radius: 999rpx; }.appointment-actions { display: flex; width: 100%; gap: 12rpx; margin: 10rpx 0 0 88rpx; }.appointment-actions button { width: auto; height: 48rpx; margin: 0; padding: 0 20rpx; color: #3478f6; font-size: 19rpx; line-height: 48rpx; background: #edf4ff; border-radius: 999rpx; }.appointment-actions .danger { color: #c65353; background: #fff0f0; }
+.stats-scroll { width: 100%; }.stats-card--four { min-width: 650rpx; }.stats-card--four .stat-item { min-width: 150rpx; }.profile-item { flex-wrap: wrap; }.profile-item__note { display: block; margin-top: 6rpx; color: #b05c4d; font-size: 20rpx; line-height: 1.5; }.inline-danger { width: auto; min-width: 132rpx; height: 80rpx; margin: 14rpx 0 0 74rpx; padding: 0 22rpx; color: #c65353; font-size: 21rpx; line-height: 80rpx; background: #fff0f0; border-radius: 22rpx; }.appointment-actions { display: flex; width: 100%; flex-wrap: wrap; gap: 12rpx; margin: 16rpx 0 10rpx 74rpx; }.appointment-actions button { width: auto; min-width: 146rpx; height: 80rpx; margin: 0; padding: 0 22rpx; color: #3478f6; font-size: 21rpx; line-height: 80rpx; background: #edf4ff; border-radius: 22rpx; }.appointment-actions .review { color: #fff; background: linear-gradient(90deg, #3478f6, #655deb); }.appointment-actions .danger { color: #c65353; background: #fff0f0; }
 .parent-editor { margin-top: 20rpx; padding: 26rpx; background: #fff; border: 1rpx solid #e8ebf1; border-radius: 26rpx; }.parent-editor__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; color: #27334a; font-size: 27rpx; font-weight: 700; }.parent-editor__head text:last-child { color: #7e8898; font-size: 21rpx; font-weight: 500; }.parent-editor input { height: 82rpx; margin-top: 14rpx; padding: 0 20rpx; color: #2b354a; font-size: 23rpx; background: #f7f8fa; border: 1rpx solid #e8ebf0; border-radius: 18rpx; }.parent-editor button { margin-top: 22rpx; color: #fff; font-size: 23rpx; background: #3478f6; border-radius: 18rpx; }
 .parent-location-control { display: flex; align-items: center; justify-content: space-between; margin-top: 14rpx; padding: 18rpx 20rpx; background: #f7f8fa; border: 1rpx solid #e8ebf0; border-radius: 18rpx; }.parent-location-control view { display: flex; min-width: 0; flex-direction: column; gap: 8rpx; }.parent-location-control view text:first-child { color: #616d80; font-size: 20rpx; font-weight: 700; }.parent-location-control view text:last-child { overflow: hidden; color: #7f8999; font-size: 20rpx; text-overflow: ellipsis; white-space: nowrap; }.parent-location-control > text { margin-left: 16rpx; color: #3478f6; }
 @media (max-width: 340px) { .profile-content { padding-right: 18rpx; padding-left: 18rpx; }.profile-user__meta { max-width: 260rpx; }.profile-item__status { font-size: 18rpx; } }

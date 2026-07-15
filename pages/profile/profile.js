@@ -17,9 +17,12 @@ Page({
     activeRole: "PARENT",
     roleName: "家长版",
     profileMeta: "资料未完善",
+    identityHint: "完善身份与匹配资料",
     metricTitle: "资料状态",
     metricValue: "未完善",
     metricHint: "完善资料后可获得更准确的匹配",
+    receivedReviewSummary: { displayAverage: null, count: 0, levelLabel: "评价积累中" },
+    reviewSummaryUnavailable: false,
     auditNote: "",
     activePanel: "applications",
     applications: [],
@@ -52,12 +55,17 @@ Page({
       const account = await api.getAccount();
       const activeRole = account.activeRole || api.getActiveRole();
       const roleApplications = activeRole === "TEACHER" ? api.listTeacherApplications() : api.listAllParentApplications();
-      const [rawPosts, rawFavorites, rawApplications, preferences, rawAppointments] = await Promise.all([
+      const [rawPosts, rawFavorites, rawApplications, preferences, rawAppointments, receivedReviews] = await Promise.all([
         api.getMineJobs(),
         api.listFavoriteJobs(),
         roleApplications,
         api.getPreferences(),
-        api.listAppointments()
+        api.listAppointments(),
+        api.listMyReceivedReviews({ limit: 3 }).catch(() => ({
+          unavailable: true,
+          items: [],
+          summary: { displayAverage: null, count: 0, levelLabel: "评价积累中" }
+        }))
       ]);
       const expectedPostType = activeRole === "TEACHER" ? "TEACHER_OFFER" : "TEACHING_NEED";
       const posts = rawPosts
@@ -75,15 +83,30 @@ Page({
       const profileMeta = activeRole === "TEACHER"
         ? [teacherProfile.school, teacherProfile.major].filter(Boolean).join(" · ") || "教师资料未完善"
         : [parentProfile.city, parentProfile.district].filter(Boolean).join(" · ") || "常用区域未完善";
-      const metricTitle = activeRole === "TEACHER" ? "教师信誉分" : "家长资料";
-      const metricValue = activeRole === "TEACHER"
-        ? String(teacherProfile.score === undefined || teacherProfile.score === null ? "--" : teacherProfile.score)
-        : [parentProfile.city, parentProfile.district, parentProfile.address].filter(Boolean).length === 3 ? "已完善" : "待完善";
-      const metricHint = activeRole === "TEACHER"
-        ? (!teacherProfile.submittedAt
-          ? "尚未提交审核，请先完善教师资料"
-          : ({ APPROVED: "认证已通过", PENDING: "资料正在审核", REJECTED: "资料被退回，请按意见修改" }[teacherProfile.auditStatus] || "请完善教师认证资料"))
-        : "完善常用区域和地址可提高匹配准确度";
+      const identityHint = activeRole === "TEACHER"
+        ? !teacherProfile.submittedAt
+          ? "教师认证尚未提交"
+          : teacherProfile.auditStatus === "APPROVED"
+            ? "教师认证已通过"
+            : teacherProfile.auditStatus === "PENDING"
+              ? "教师认证正在审核"
+              : `认证需修改：${teacherProfile.auditNote || "请查看审核意见"}`
+        : [parentProfile.city, parentProfile.district, parentProfile.address].filter(Boolean).length === 3
+          ? "家长常用区域与地址已完善"
+          : "完善常用区域可获得更准确的匹配";
+      const receivedReviewSummary = receivedReviews.summary || { displayAverage: null, count: 0, levelLabel: "评价积累中" };
+      const reviewSummaryUnavailable = Boolean(receivedReviews.unavailable);
+      const metricTitle = activeRole === "TEACHER" ? "我的教师口碑" : "我的家长口碑";
+      const metricValue = reviewSummaryUnavailable
+        ? "暂不可用"
+        : receivedReviewSummary.displayAverage !== null
+          ? `${receivedReviewSummary.displayAverage} ★`
+          : receivedReviewSummary.count
+            ? `${receivedReviewSummary.count} 条`
+            : "待积累";
+      const metricHint = reviewSummaryUnavailable
+        ? "口碑加载失败 · 点击进入重试查看"
+        : `${receivedReviewSummary.levelLabel || "评价积累中"} · 查看 ${receivedReviewSummary.count || 0} 条真实合作评价`;
       this.setData({
         account,
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
@@ -91,9 +114,12 @@ Page({
         activeRole,
         roleName: activeRole === "TEACHER" ? "老师版" : "家长版",
         profileMeta,
+        identityHint,
         metricTitle,
         metricValue,
         metricHint,
+        receivedReviewSummary,
+        reviewSummaryUnavailable,
         auditNote: teacherProfile.auditNote || "",
         applications,
         favorites,
@@ -138,14 +164,47 @@ Page({
     const job = api.normalizeJob(item.job || (item.application && item.application.job) || {});
     const ownerId = item.job && item.job.ownerId;
     const teacherId = item.application && item.application.teacherId;
+    const completionActions = item.completionActions || {};
+    const completionProgress = item.completionProgress || {};
+    let statusLabel = APPOINTMENT_STATUS[item.status] || item.status;
+    let workflowHint = item.statusNote || "";
+    if (item.status === "CONFIRMED") {
+      if (completionActions.canAcknowledge) {
+        statusLabel = "待我确认完成";
+        workflowHint = "确认本次服务已完成后，还需等待合作方确认";
+      } else if (completionActions.waitingForOtherParty) {
+        statusLabel = "等待对方确认";
+        workflowHint = "我已确认完成，正在等待合作方确认";
+      } else if (completionActions.requiresRoleSwitch) {
+        statusLabel = "切换身份确认";
+        workflowHint = `请切换到${completionActions.requiredRole === "TEACHER" ? "老师" : "家长"}版确认完成`;
+      }
+    } else if (item.status === "COMPLETED") {
+      if (item.canReview) {
+        statusLabel = "待评价";
+        workflowHint = `双方已确认完成，可以评价${item.reviewTarget ? item.reviewTarget.label : "合作方"}`;
+      } else if (item.myReview) {
+        statusLabel = "已评价";
+        workflowHint = `已提交 ${item.myReview.rating} 星评价`;
+      } else if (completionProgress.fullyAcknowledged) {
+        workflowHint = "双方均已确认本次合作完成";
+      }
+    }
     return {
       ...item,
       jobId: item.jobId || job.id,
       title: job.title || "合作预约",
       meta: [job.locationLabel, item.startAt ? api.formatDate(item.startAt) : "时间待确认"].filter(Boolean).join(" · "),
-      statusLabel: APPOINTMENT_STATUS[item.status] || item.status,
+      statusLabel,
+      workflowHint,
       canConfirm: activeRole === "TEACHER" && item.status === "PENDING" && teacherId === accountId,
-      canComplete: activeRole === "PARENT" && item.status === "CONFIRMED" && ownerId === accountId,
+      canComplete: Boolean(completionActions.canAcknowledge),
+      hasAcknowledged: Boolean(completionActions.hasAcknowledged),
+      waitingForOtherParty: Boolean(completionActions.waitingForOtherParty),
+      requiresRoleSwitch: Boolean(completionActions.requiresRoleSwitch),
+      canReview: Boolean(item.canReview),
+      myReview: item.myReview || null,
+      reviewTarget: item.reviewTarget || null,
       canCancel: (item.status === "PENDING" || item.status === "CONFIRMED") && (ownerId === accountId || teacherId === accountId),
       canDispute: ["PENDING", "CONFIRMED", "COMPLETED"].includes(item.status) && (ownerId === accountId || teacherId === accountId),
       recordType: "appointment"
@@ -292,6 +351,16 @@ Page({
     else this.setData({ showParentEditor: true, showSettings: false });
   },
 
+  openReceivedReviews() {
+    wx.navigateTo({ url: "/pages/reviews/reviews?received=1" });
+  },
+
+  goReview(event) {
+    const id = event.currentTarget.dataset.id;
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/reviews/reviews?appointmentId=${id}` });
+  },
+
   closeParentEditor() { this.setData({ showParentEditor: false }); },
   handleParentRegion(event) {
     const parentRegion = event.detail.value || DEFAULT_REGION;
@@ -373,7 +442,11 @@ Page({
     const requiresReason = action === "cancel" || action === "dispute";
     wx.showModal({
       title: labels[action] || "更新预约",
-      content: requiresReason ? `${action === "cancel" ? "取消" : "争议"}会同步给合作方，请填写原因。` : "操作结果会同步到双方的数据库记录。",
+      content: requiresReason
+        ? `${action === "cancel" ? "取消" : "争议"}会同步给合作方，请填写原因。`
+        : action === "complete"
+          ? "请确认本次服务已经完成。提交后还需合作方确认，双方确认后才会进入已完成。"
+          : "确认后，预约状态会同步给合作双方。",
       editable: requiresReason,
       placeholderText: requiresReason ? `请输入${action === "cancel" ? "取消" : "争议"}原因（必填）` : "",
       confirmText: "确认",

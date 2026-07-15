@@ -356,6 +356,18 @@
   border-radius: 8rpx;
 }
 
+.application-fact--reviews {
+  display: flex;
+  align-items: center;
+  min-height: 80rpx;
+  padding-right: 16rpx;
+  padding-left: 16rpx;
+  color: #9a6b18;
+  font-size: 20rpx;
+  font-weight: 650;
+  background: #fff7e6;
+}
+
 .application-card__subjects {
   display: flex;
   flex-wrap: wrap;
