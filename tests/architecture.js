@@ -40,6 +40,16 @@ const productionCompose = read("compose.production.yaml");
 assert.match(productionCompose, /WECHAT_LOGIN_MOCK:\s*"false"/);
 assert.match(productionCompose, /SEED_DEMO_DATA:\s*"false"/);
 
+for (const nginxConfigPath of ["infra/nginx/default.conf", "infra/nginx/production.conf"]) {
+  const nginxConfig = read(nginxConfigPath);
+  assert.match(nginxConfig, /resolver 127\.0\.0\.11 valid=10s ipv6=off;/);
+  assert.match(nginxConfig, /zone tutor_api 64k;/);
+  assert.match(nginxConfig, /server api:3000 resolve;/);
+  assert.match(nginxConfig, /zone tutor_admin 64k;/);
+  assert.match(nginxConfig, /server admin-web:80 resolve;/);
+  assert.match(nginxConfig, /proxy_pass http:\/\/tutor_admin;/);
+}
+
 const project = JSON.parse(read("project.config.json"));
 assert.equal(project.appid, "wx02054be10e52aff0");
-console.log("Architecture checks passed: Docker services, production safeguards, persistent workflow models, backend modules, and AppID.");
+console.log("Architecture checks passed: Docker services, production safeguards, dynamic upstream DNS, persistent workflow models, backend modules, and AppID.");
