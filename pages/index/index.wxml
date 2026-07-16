@@ -34,7 +34,10 @@
           <text class="job-card__description">{{item.description}}</text>
           <view class="job-card__tags"><text class="tag tag--neutral">{{item.settlement || '结算待沟通'}}</text><text class="tag tag--blue">{{item.grade}}</text><text class="tag tag--outline">{{item.distance || item.subject}}</text></view>
         </view>
-        <view class="job-card__actions"><button class="apply-button {{item.currentApplication ? 'apply-button--pending' : ''}}" loading="{{actionId === item.id}}" data-id="{{item.id}}" bindtap="applyJob" aria-label="{{activeRole === 'TEACHER' ? item.actionLabel : '查看老师'}}：{{item.title}}">{{activeRole === 'TEACHER' ? item.actionLabel : '查看老师'}}</button><button class="icon-button {{item.favorite ? 'icon-button--favorite' : ''}}" loading="{{actionId === 'favorite-' + item.id}}" data-id="{{item.id}}" bindtap="toggleFavorite" aria-label="{{item.favorite ? '取消收藏' : '收藏'}}：{{item.title}}">{{item.favorite ? '♥' : '♡'}}</button><button class="icon-button" open-type="share" data-id="{{item.id}}" aria-label="分享：{{item.title}}">↗</button></view>
+        <view class="job-card__actions">
+          <button class="icon-button {{item.favorite ? 'icon-button--favorite' : ''}}" loading="{{actionId === 'favorite-' + item.id}}" data-id="{{item.id}}" bindtap="toggleFavorite" aria-label="{{item.favorite ? '取消收藏' : '收藏'}}：{{item.title}}"><text class="icon-button__icon">{{item.favorite ? '♥' : '♡'}}</text><text class="icon-button__label">{{item.favorite ? '已收藏' : '收藏'}}</text></button>
+          <button class="icon-button" open-type="share" data-id="{{item.id}}" aria-label="分享：{{item.title}}"><text class="icon-button__icon">↗</text><text class="icon-button__label">分享</text></button>
+        </view>
       </view>
     </view>
     <view class="empty-card" wx:else><view class="empty-card__icon">⌕</view><text class="empty-card__title">暂时没有匹配信息</text><text class="empty-card__copy">换个科目或区域看看，新的发布也许正在路上</text><button class="empty-card__button" bindtap="resetFilters">查看全部</button></view>

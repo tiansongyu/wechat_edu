@@ -860,56 +860,41 @@
 }
 
 .job-card__actions {
-  justify-content: center;
   gap: 12rpx;
   padding: 16rpx 22rpx 22rpx;
   border-top: 1rpx solid #f0f2f6;
 }
 
-.apply-button {
-  overflow: hidden;
-  flex: 0 1 auto;
-  min-width: 210rpx;
-  max-width: 250rpx;
-  height: 76rpx;
-  margin: 0;
-  padding: 0 22rpx;
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: 600;
-  line-height: 76rpx;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: linear-gradient(90deg, #3478f6, #4c57ed);
-  border-radius: 20rpx;
-  box-shadow: 0 8rpx 16rpx rgba(52, 120, 246, 0.18);
-  box-sizing: border-box;
-}
-
-.apply-button--pending {
-  background: linear-gradient(90deg, #27ad62, #1abc6c);
-  box-shadow: 0 10rpx 20rpx rgba(31, 168, 94, 0.2);
-}
-
 .icon-button {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  width: 76rpx;
-  min-width: 76rpx;
+  width: 0;
+  min-width: 0;
   height: 76rpx;
+  gap: 10rpx;
   margin: 0;
-  padding: 0;
+  padding: 0 20rpx;
   color: #697286;
-  font-size: 29rpx;
-  line-height: 76rpx;
+  line-height: normal;
   background: #f7f8fa;
   border: 1rpx solid #e9ecf1;
   border-radius: 20rpx;
   box-sizing: border-box;
 }
 .icon-button::after { border: 0; }
+
+.icon-button__icon {
+  font-size: 29rpx;
+  line-height: 1;
+}
+
+.icon-button__label {
+  font-size: 23rpx;
+  font-weight: 650;
+  line-height: 1;
+}
 
 .icon-button--favorite {
   color: #ef6b63;

@@ -19,9 +19,6 @@ Page({
     roleName: "家长版",
     locationLabel: "资料未完善",
     verificationLabel: "资料未认证",
-    teacherCanApply: false,
-    teacherApplicationAction: "完善教师认证",
-    teacherApplicationReason: "请先完善并提交教师认证资料",
     query: "",
     jobs: [],
     filteredJobs: [],
@@ -95,24 +92,9 @@ Page({
       const account = await getApp().ensureAuth(true);
       const activeRole = account.activeRole || api.getActiveRole();
       const teacherProfile = account.teacherProfile || {};
-      const teacherEligibility = api.getTeacherApplicationEligibility(teacherProfile);
       const type = activeRole === "TEACHER" ? "TEACHING_NEED" : "TEACHER_OFFER";
-      const requests = [api.listAllJobs(this.buildJobQuery(type))];
-      if (activeRole === "TEACHER") requests.push(api.listTeacherApplications());
-      const [result, applications = []] = await Promise.all(requests);
-      const applicationByJob = applications.reduce((map, item) => {
-        map[item.jobId || (item.job && item.job.id)] = item;
-        return map;
-      }, {});
-      const jobs = (result.items || []).map((item) => {
-        const job = api.normalizeJob(item);
-        const currentApplication = item.currentApplication || applicationByJob[item.id] || null;
-        const canSubmitApplication = !currentApplication || currentApplication.status === "CANCELLED";
-        const actionLabel = activeRole === "TEACHER" && canSubmitApplication && !teacherEligibility.canApply
-          ? teacherEligibility.actionLabel
-          : this.applicationLabel(currentApplication);
-        return { ...job, currentApplication, actionLabel };
-      });
+      const result = await api.listAllJobs(this.buildJobQuery(type));
+      const jobs = (result.items || []).map((item) => api.normalizeJob(item));
       const parentProfile = account.parentProfile || {};
       const locationLabel = activeRole === "TEACHER"
         ? ((teacherProfile.serviceAreas || []).map((area) => area.district).filter(Boolean).join("、") || (teacherProfile.serviceDistricts || []).join("、") || "服务区域未设置")
@@ -128,9 +110,6 @@ Page({
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
         activeRole,
         roleName: activeRole === "TEACHER" ? "老师版" : "家长版",
-        teacherCanApply: teacherEligibility.canApply,
-        teacherApplicationAction: teacherEligibility.actionLabel,
-        teacherApplicationReason: teacherEligibility.reason,
         locationLabel,
         verificationLabel,
         jobs,
@@ -225,11 +204,6 @@ Page({
     return grade === group;
   },
 
-  applicationLabel(application) {
-    if (!application) return "立即申请";
-    return { PENDING: "申请审核中", ACCEPTED: "已被录用", REJECTED: "本次未选中", CANCELLED: "重新申请" }[application.status] || "查看申请";
-  },
-
   switchRole() {
     if (this.data.actionId || this.data.rolePromptOpen) return;
     const next = this.data.activeRole === "TEACHER" ? "PARENT" : "TEACHER";
@@ -274,58 +248,6 @@ Page({
 
   openDetail(event) {
     wx.navigateTo({ url: `/pages/job-detail/job-detail?id=${event.currentTarget.dataset.id}` });
-  },
-
-  applyJob(event) {
-    const id = event.currentTarget.dataset.id;
-    const job = this.data.jobs.find((item) => item.id === id);
-    if (!job) return;
-    if (this.data.activeRole !== "TEACHER") {
-      this.openDetail(event);
-      return;
-    }
-    if (job.currentApplication && job.currentApplication.status !== "CANCELLED") {
-      wx.showToast({ title: job.actionLabel, icon: "none" });
-      return;
-    }
-    if (!this.data.teacherCanApply) {
-      if (this.data.teacherApplicationAction === "认证审核中") {
-        wx.showToast({ title: this.data.teacherApplicationReason, icon: "none" });
-      } else {
-        wx.navigateTo({ url: "/pages/teacher-profile/teacher-profile" });
-      }
-      return;
-    }
-    wx.showModal({
-      title: "确认申请",
-      content: `确认使用当前教师资料申请“${job.title}”？提交后可在平台内先沟通。`,
-      editable: true,
-      placeholderText: "可填写教学优势、可约时间或想确认的问题",
-      confirmText: "提交申请",
-      confirmColor: "#3478f6",
-      success: async ({ confirm, content }) => {
-        if (!confirm || this.data.actionId) return;
-        const coverLetter = String(content || "").trim().slice(0, 1000);
-        const signature = `${id}:job-apply:${coverLetter}`;
-        if (!this._pendingApply || this._pendingApply.signature !== signature) {
-          this._pendingApply = {
-            signature,
-            key: api.createCommandKey("job-apply", id)
-          };
-        }
-        this.setData({ actionId: id });
-        try {
-          await api.applyJob(id, coverLetter, this._pendingApply.key);
-          this._pendingApply = null;
-          await this.loadData(false);
-          wx.showToast({ title: "申请已提交", icon: "success" });
-        } catch (error) {
-          wx.showToast({ title: error.message || "申请失败", icon: "none" });
-        } finally {
-          this.setData({ actionId: "" });
-        }
-      }
-    });
   },
 
   async toggleFavorite(event) {

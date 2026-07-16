@@ -91,9 +91,11 @@ assert.match(homeTemplate, /data-subject="{{item\.label}}" bindtap="chooseSubjec
 assert.match(homeSource, /setTimeout\(\(\) => this\.loadData\(false\), 350\)/, "search must debounce API requests");
 assert.match(homeSource, /loadSequence !== this\._loadSequence/, "stale search responses must not overwrite newer results");
 assert.match(homeSource, /subjects: selectedSubjects\.length \? selectedSubjects\.join\(","\)/, "subject filters must support multiple values");
-assert.match(homeStyle, /\.job-card__actions\s*\{[^}]*justify-content:\s*center;[^}]*gap:\s*12rpx;/s, "job actions should use a compact centered layout");
-assert.match(homeStyle, /\.apply-button\s*\{[^}]*flex:\s*0 1 auto;[^}]*min-width:\s*210rpx;[^}]*max-width:\s*250rpx;/s, "primary job action should not stretch across the card");
-assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*76rpx;[^}]*min-width:\s*76rpx;[^}]*height:\s*76rpx;/s, "favorite and share actions must remain compact squares");
+assert.doesNotMatch(homeTemplate, /apply-button|bindtap="applyJob"/, "list cards should not render the left-side application/profile action");
+assert.match(homeTemplate, /icon-button__label">\{\{item\.favorite \? '已收藏' : '收藏'\}\}/);
+assert.match(homeTemplate, /icon-button__label">分享/);
+assert.match(homeStyle, /\.job-card__actions\s*\{[^}]*gap:\s*12rpx;/s, "favorite and share actions should retain a clear gap");
+assert.match(homeStyle, /\.icon-button\s*\{[^}]*flex:\s*1 1 0;[^}]*width:\s*0;[^}]*min-width:\s*0;/s, "favorite and share actions must split the row one-to-one");
 assert.match(profileTemplate, /open-type="chooseAvatar"/);
 assert.match(profileTemplate, /src="\{\{avatarDisplayUrl\}\}"[^>]+binderror="handleAvatarError"/);
 assert.match(profileSource, /purpose:\s*"AVATAR"/);
@@ -113,6 +115,7 @@ assert.match(applicationsTemplate, /reviewLabel/);
 assert.match(homeTemplate, /platformOverview\.brand\.name/);
 assert.match(homeTemplate, /bindtap="retryPlatformOverview"/);
 assert.match(detailTemplate, /当前身份/);
+assert.match(detailTemplate, /bindtap="applyJob"/, "application flow must remain available from the detail page");
 assert.match(mapTemplate, /picker[^>]+bindchange="changeDistrict"/);
 assert.match(mapTemplate, /bindtap="openLocationSetting"/);
 assert.match(messagesTemplate, /messages-role--\{\{roleTone\}\}/);
@@ -247,29 +250,7 @@ const waitingCompletion = pages[4].normalizeAppointment({
 assert.equal(waitingCompletion.canComplete, false);
 assert.equal(waitingCompletion.statusLabel, "等待对方确认");
 
-const homePage = {
-  ...pages[0],
-  data: {
-    ...pages[0].data,
-    activeRole: "TEACHER",
-    teacherCanApply: false,
-    teacherApplicationAction: "完善教师认证",
-    teacherApplicationReason: "请先完善并提交教师认证资料",
-    jobs: [{ id: "job-needs-certification", currentApplication: null, actionLabel: "完善教师认证" }]
-  },
-  setData(update) { this.data = { ...this.data, ...update }; }
-};
-let navigatedTo = "";
-let applicationCalls = 0;
-const originalNavigateTo = wx.navigateTo;
-const originalApplyJob = apiClient.applyJob;
-wx.navigateTo = ({ url }) => { navigatedTo = url; };
-apiClient.applyJob = async () => { applicationCalls += 1; };
-homePage.applyJob.call(homePage, { currentTarget: { dataset: { id: "job-needs-certification" } } });
-assert.equal(navigatedTo, "/pages/teacher-profile/teacher-profile");
-assert.equal(applicationCalls, 0, "an unapproved teacher must not send an application request");
-wx.navigateTo = originalNavigateTo;
-apiClient.applyJob = originalApplyJob;
+assert.equal(pages[0].applyJob, undefined, "the removed list-card application action should not leave a hidden handler");
 
 const firstDeviceId = requestClient.getDeviceId();
 assert.equal(requestClient.getDeviceId(), firstDeviceId);
@@ -710,7 +691,7 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     if (originalAvatarWx.env === undefined) delete wx.env;
     else wx.env = originalAvatarWx.env;
 
-    console.log("Smoke checks passed: debounced stale-safe search, multi-subject filters, square card actions, persistent WeChat avatar preview, database-only client flows, role-scoped chat, verified reviews and commands, nickname editing, 10 pages, and native tab bar.");
+    console.log("Smoke checks passed: debounced stale-safe search, multi-subject filters, equal favorite/share card actions, persistent WeChat avatar preview, database-only client flows, role-scoped chat, verified reviews and commands, nickname editing, 10 pages, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);
