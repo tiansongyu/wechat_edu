@@ -1,6 +1,7 @@
 const api = require("../../utils/api");
 const locationPermission = require("../../utils/location-permission");
 const DEFAULT_REGION = ["广东省", "深圳市", "南山区"];
+const AVATAR_CACHE_KEY = "tutor_link_avatar_cache_v1";
 
 const APPLICATION_STATUS = { PENDING: "待处理", ACCEPTED: "已录用", REJECTED: "未选中", CANCELLED: "已取消" };
 const APPOINTMENT_STATUS = { PENDING: "待确认", CONFIRMED: "已确认", COMPLETED: "已完成", CANCELLED: "已取消", DISPUTED: "有争议" };
@@ -62,6 +63,62 @@ function settleReviews(promise) {
     .catch((error) => ({ value: fallback, error, label: "合作评价" }));
 }
 
+function avatarContentType(data, fallback = "") {
+  if (!data || typeof data.byteLength !== "number") return fallback;
+  const bytes = new Uint8Array(data);
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  return fallback;
+}
+
+function avatarCachePath(accountId, contentType) {
+  const safeId = String(accountId || "account").replace(/[^a-z0-9_-]/gi, "").slice(0, 64) || "account";
+  const extension = contentType === "image/png" ? "png" : "jpg";
+  return `${wx.env.USER_DATA_PATH}/tutor-avatar-${safeId}.${extension}`;
+}
+
+function cachedAvatarPath(account) {
+  if (!account || !account.id || !account.avatarUrl) return "";
+  const cached = wx.getStorageSync(AVATAR_CACHE_KEY);
+  if (!cached || cached.accountId !== account.id || cached.remoteUrl !== account.avatarUrl || !cached.filePath) return "";
+  try {
+    const manager = wx.getFileSystemManager();
+    if (typeof manager.accessSync === "function") manager.accessSync(cached.filePath);
+    return cached.filePath;
+  } catch {
+    wx.removeStorageSync(AVATAR_CACHE_KEY);
+    return "";
+  }
+}
+
+function cacheAvatarBytes(account, data, contentType) {
+  return new Promise((resolve, reject) => {
+    if (!account || !account.id || !account.avatarUrl) {
+      reject(new Error("头像账号信息不完整"));
+      return;
+    }
+    const detectedType = avatarContentType(data, contentType);
+    if (!["image/jpeg", "image/png"].includes(detectedType)) {
+      reject(new Error("头像文件格式异常"));
+      return;
+    }
+    const filePath = avatarCachePath(account.id, detectedType);
+    wx.getFileSystemManager().writeFile({
+      filePath,
+      data,
+      success() {
+        wx.setStorageSync(AVATAR_CACHE_KEY, { accountId: account.id, remoteUrl: account.avatarUrl, filePath });
+        resolve(filePath);
+      },
+      fail: reject
+    });
+  });
+}
+
 Page({
   data: {
     loading: true,
@@ -71,6 +128,7 @@ Page({
     rolePromptOpen: false,
     account: null,
     accountInitial: "人",
+    avatarDisplayUrl: "",
     showNicknameEditor: false,
     nicknameDraft: "",
     savingNickname: false,
@@ -184,6 +242,7 @@ Page({
       this.setData({
         account,
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
+        avatarDisplayUrl: cachedAvatarPath(account) || account.avatarUrl || "",
         nicknameDraft: account.nickname || "",
         activeRole,
         roleName: activeRole === "TEACHER" ? "老师版" : "家长版",
@@ -224,7 +283,10 @@ Page({
         },
         loading: false,
         error: ""
-      }, () => this.applyPanel());
+      }, () => {
+        this.applyPanel();
+        this.refreshAvatarCache(account);
+      });
       getApp().globalData.account = account;
       getApp().globalData.activeRole = activeRole;
       return true;
@@ -360,14 +422,18 @@ Page({
   async chooseAvatar(event) {
     const filePath = event.detail && event.detail.avatarUrl;
     if (!filePath || this.data.avatarUploading) return;
-    this.setData({ avatarUploading: true });
+    const previousDisplayUrl = this.data.avatarDisplayUrl;
+    this.setData({ avatarUploading: true, avatarDisplayUrl: filePath });
     wx.showLoading({ title: "上传头像" });
     try {
       const fileInfo = await new Promise((resolve, reject) => {
         wx.getFileSystemManager().getFileInfo({ filePath, success: resolve, fail: reject });
       });
+      const binary = await new Promise((resolve, reject) => {
+        wx.getFileSystemManager().readFile({ filePath, success: ({ data }) => resolve(data), fail: reject });
+      });
       const lowerPath = String(filePath).toLowerCase();
-      const contentType = lowerPath.includes(".png") ? "image/png" : "image/jpeg";
+      const contentType = avatarContentType(binary, lowerPath.includes(".png") ? "image/png" : "image/jpeg");
       const extension = contentType === "image/png" ? "png" : "jpg";
       const signed = await api.createUploadUrl({
         purpose: "AVATAR",
@@ -375,30 +441,64 @@ Page({
         contentType,
         size: fileInfo.size
       });
-      const binary = await new Promise((resolve, reject) => {
-        wx.getFileSystemManager().readFile({ filePath, success: ({ data }) => resolve(data), fail: reject });
-      });
       await new Promise((resolve, reject) => {
+        const uploadHeaders = {
+          ...(signed.requiredHeaders || { "Content-Type": contentType }),
+          ...(String(signed.uploadUrl || "").includes(".ngrok-free.") ? { "ngrok-skip-browser-warning": "true" } : {})
+        };
         wx.request({
           url: signed.uploadUrl,
           method: "PUT",
           data: binary,
-          header: { "content-type": contentType },
+          header: uploadHeaders,
           success: ({ statusCode }) => statusCode >= 200 && statusCode < 300 ? resolve() : reject(new Error("头像上传失败")),
           fail: () => reject(new Error("文件服务连接失败"))
         });
       });
       const account = await api.updateAccount({ avatarObjectKey: signed.objectKey });
-      this.setData({ account, accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人" });
+      let avatarDisplayUrl = filePath;
+      try {
+        avatarDisplayUrl = await cacheAvatarBytes(account, binary, contentType);
+      } catch {}
+      this.setData({ account, accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人", avatarDisplayUrl });
       getApp().globalData.account = account;
       wx.hideLoading();
       wx.showToast({ title: "头像已更新", icon: "success" });
     } catch (error) {
+      this.setData({ avatarDisplayUrl: previousDisplayUrl });
       wx.hideLoading();
       wx.showToast({ title: error.message || "头像更新失败", icon: "none" });
     } finally {
       this.setData({ avatarUploading: false });
     }
+  },
+
+  async refreshAvatarCache(account, force = false) {
+    if (!account || !account.avatarUrl) return;
+    const cached = cachedAvatarPath(account);
+    if (cached && !force) {
+      if (this.data.avatarDisplayUrl !== cached) this.setData({ avatarDisplayUrl: cached });
+      return;
+    }
+    if (this._avatarCacheRequest === account.avatarUrl) return;
+    this._avatarCacheRequest = account.avatarUrl;
+    try {
+      const binary = await api.fetchMedia(account.avatarUrl);
+      const filePath = await cacheAvatarBytes(account, binary, "");
+      if (this.data.account && this.data.account.id === account.id && this.data.account.avatarUrl === account.avatarUrl) {
+        this.setData({ avatarDisplayUrl: filePath });
+      }
+    } catch {
+      if (this.data.avatarDisplayUrl === account.avatarUrl) this.setData({ avatarDisplayUrl: "" });
+    } finally {
+      this._avatarCacheRequest = "";
+    }
+  },
+
+  handleAvatarError() {
+    const account = this.data.account;
+    this.setData({ avatarDisplayUrl: "" });
+    if (account && account.avatarUrl) this.refreshAvatarCache(account, true);
   },
 
   switchRole() {

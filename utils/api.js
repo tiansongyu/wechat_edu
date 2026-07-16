@@ -355,6 +355,10 @@ function createUploadUrl(data) {
   return request("/api/v1/files/upload-url", { method: "POST", data });
 }
 
+function fetchMedia(url) {
+  return requestClient.fetchBinary(url);
+}
+
 function addTeacherCertification(data) {
   return request("/api/v1/profiles/teacher/certifications", { method: "POST", data });
 }
@@ -417,6 +421,7 @@ module.exports = {
   createUploadUrl,
   ensureLogin,
   favoriteJob,
+  fetchMedia,
   formatDate,
   getAccount,
   getActiveRole,

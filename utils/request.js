@@ -31,8 +31,9 @@ function normalizeMediaUrls(value) {
   }
   Object.keys(value).forEach((key) => {
     const item = value[key];
-    if (key === "avatarUrl" && typeof item === "string" && item.startsWith("/")) {
-      value[key] = `${API_BASE_URL}${item}`;
+    if (key === "avatarUrl" && typeof item === "string") {
+      const mediaPathIndex = item.indexOf("/media/");
+      if (mediaPathIndex >= 0) value[key] = `${API_BASE_URL}${item.slice(mediaPathIndex)}`;
     } else if (item && typeof item === "object") {
       normalizeMediaUrls(item);
     }
@@ -66,6 +67,15 @@ function wxRequest(options) {
         reject(error);
       }
     });
+  });
+}
+
+function fetchBinary(url) {
+  return wxRequest({
+    url,
+    method: "GET",
+    responseType: "arraybuffer",
+    header: { Accept: "image/jpeg,image/png" }
   });
 }
 
@@ -243,6 +253,7 @@ module.exports = {
   TOKEN_KEY,
   clearSession,
   ensureAuthenticated,
+  fetchBinary,
   getActiveRole,
   getDeviceId,
   loginSession,

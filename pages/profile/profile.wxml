@@ -8,7 +8,7 @@
     </view>
     <view class="profile-user" wx:if="{{account}}">
       <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" loading="{{avatarUploading}}">
-        <image wx:if="{{account.avatarUrl}}" class="profile-avatar profile-avatar--image" src="{{account.avatarUrl}}" mode="aspectFill" />
+        <image wx:if="{{avatarDisplayUrl}}" class="profile-avatar profile-avatar--image" src="{{avatarDisplayUrl}}" mode="aspectFill" binderror="handleAvatarError" />
         <view wx:else class="profile-avatar">{{accountInitial}}</view>
         <text class="avatar-picker__badge">＋</text>
       </button>

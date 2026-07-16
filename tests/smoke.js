@@ -95,8 +95,11 @@ assert.match(homeStyle, /\.job-card__actions\s*\{[^}]*justify-content:\s*center;
 assert.match(homeStyle, /\.apply-button\s*\{[^}]*flex:\s*0 1 auto;[^}]*min-width:\s*210rpx;[^}]*max-width:\s*250rpx;/s, "primary job action should not stretch across the card");
 assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*76rpx;[^}]*min-width:\s*76rpx;[^}]*height:\s*76rpx;/s, "favorite and share actions must remain compact squares");
 assert.match(profileTemplate, /open-type="chooseAvatar"/);
+assert.match(profileTemplate, /src="\{\{avatarDisplayUrl\}\}"[^>]+binderror="handleAvatarError"/);
 assert.match(profileSource, /purpose:\s*"AVATAR"/);
 assert.match(profileSource, /avatarObjectKey:\s*signed\.objectKey/);
+assert.match(profileSource, /cacheAvatarBytes\(account, binary, contentType\)/);
+assert.match(profileSource, /ngrok-skip-browser-warning/);
 assert.match(profileTemplate, /profile-hero__title">我的成长档案/);
 assert.match(profileTemplate, /profile-identity-progress/);
 assert.match(profileTemplate, /profile-overview-card/);
@@ -288,6 +291,19 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.deepEqual(capturedRequests[0].data, {}, "body-less JSON writes must send a valid empty object");
     const expectedNgrokBypass = requestClient.API_BASE_URL.includes(".ngrok-free.") ? "true" : undefined;
     assert.equal(capturedRequests[0].header["ngrok-skip-browser-warning"], expectedNgrokBypass, "the ngrok bypass header must only be sent through a free ngrok tunnel");
+
+    const originalMediaRequest = wx.request;
+    wx.request = (options) => options.success({
+      statusCode: 200,
+      data: { id: "avatar-account", avatarUrl: "http://127.0.0.1:4000/media/tutor-link/avatars/avatar-account/legacy.jpg" }
+    });
+    const normalizedLegacyAvatar = await requestClient.request("/api/v1/avatar-normalization-test", { auth: false });
+    assert.equal(
+      normalizedLegacyAvatar.avatarUrl,
+      `${requestClient.API_BASE_URL}/media/tutor-link/avatars/avatar-account/legacy.jpg`,
+      "legacy localhost media URLs must be rewritten to the active HTTPS API origin"
+    );
+    wx.request = originalMediaRequest;
 
     await apiClient.createReview("appointment-1", {
       rating: 5,
@@ -622,7 +638,79 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(profilePage.data.showNicknameEditor, false);
     apiClient.updateAccount = originalUpdateAccount;
 
-    console.log("Smoke checks passed: debounced stale-safe search, multi-subject filters, square card actions, WeChat avatar upload wiring, database-only client flows, role-scoped chat, verified reviews and commands, nickname editing, 10 pages, and native tab bar.");
+    const avatarPngBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+    const avatarPng = avatarPngBuffer.buffer.slice(avatarPngBuffer.byteOffset, avatarPngBuffer.byteOffset + avatarPngBuffer.byteLength);
+    const originalAvatarWx = {
+      env: wx.env,
+      getFileSystemManager: wx.getFileSystemManager,
+      hideLoading: wx.hideLoading,
+      request: wx.request,
+      showLoading: wx.showLoading
+    };
+    const originalAvatarApi = {
+      createUploadUrl: apiClient.createUploadUrl,
+      updateAccount: apiClient.updateAccount
+    };
+    let avatarUploadHeaders;
+    let cachedAvatarWrite;
+    wx.env = { USER_DATA_PATH: "wxfile://usr" };
+    wx.showLoading = () => {};
+    wx.hideLoading = () => {};
+    wx.getFileSystemManager = () => ({
+      accessSync() {},
+      getFileInfo({ success }) { success({ size: avatarPng.byteLength }); },
+      readFile({ success }) { success({ data: avatarPng }); },
+      writeFile({ filePath, data, success }) {
+        cachedAvatarWrite = { filePath, data };
+        success();
+      }
+    });
+    wx.request = (options) => {
+      avatarUploadHeaders = options.header;
+      options.success({ statusCode: 200, data: {} });
+    };
+    apiClient.createUploadUrl = async (payload) => {
+      assert.equal(payload.contentType, "image/png", "avatar type should be detected from bytes, not only the temporary path");
+      return {
+        uploadUrl: "https://avatar-test.ngrok-free.dev/tutor-link/avatars/test-account/avatar.png",
+        objectKey: "avatars/test-account/avatar.png",
+        requiredHeaders: { "Content-Type": "image/png" }
+      };
+    };
+    apiClient.updateAccount = async () => ({
+      id: "test-account",
+      nickname: "微信用户",
+      avatarUrl: "https://avatar-test.ngrok-free.dev/media/tutor-link/avatars/test-account/avatar.png",
+      activeRole: "PARENT"
+    });
+    const avatarPage = {
+      ...pages[4],
+      data: {
+        ...pages[4].data,
+        account: { id: "test-account", nickname: "微信用户", avatarUrl: "" },
+        avatarDisplayUrl: "",
+        avatarUploading: false
+      },
+      setData(update) { this.data = { ...this.data, ...update }; }
+    };
+    await avatarPage.chooseAvatar.call(avatarPage, { detail: { avatarUrl: "wxfile://tmp/wechat-avatar.jpg" } });
+    assert.equal(avatarPage.data.avatarUploading, false);
+    assert.match(avatarPage.data.avatarDisplayUrl, /^wxfile:\/\/usr\/tutor-avatar-test-account\.png$/);
+    assert.equal(cachedAvatarWrite.data, avatarPng);
+    assert.equal(storage.get("tutor_link_avatar_cache_v1").filePath, avatarPage.data.avatarDisplayUrl);
+    assert.equal(storage.get("tutor_link_avatar_cache_v1").remoteUrl, avatarPage.data.account.avatarUrl);
+    assert.equal(avatarUploadHeaders["ngrok-skip-browser-warning"], "true");
+    assert.equal(appStub.globalData.account.avatarUrl, "https://avatar-test.ngrok-free.dev/media/tutor-link/avatars/test-account/avatar.png");
+    apiClient.createUploadUrl = originalAvatarApi.createUploadUrl;
+    apiClient.updateAccount = originalAvatarApi.updateAccount;
+    wx.request = originalAvatarWx.request;
+    wx.getFileSystemManager = originalAvatarWx.getFileSystemManager;
+    wx.showLoading = originalAvatarWx.showLoading;
+    wx.hideLoading = originalAvatarWx.hideLoading;
+    if (originalAvatarWx.env === undefined) delete wx.env;
+    else wx.env = originalAvatarWx.env;
+
+    console.log("Smoke checks passed: debounced stale-safe search, multi-subject filters, square card actions, persistent WeChat avatar preview, database-only client flows, role-scoped chat, verified reviews and commands, nickname editing, 10 pages, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);
