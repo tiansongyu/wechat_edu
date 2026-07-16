@@ -6,13 +6,15 @@ import * as argon2 from "argon2";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AccountStatus, RoleCode } from "../../generated/prisma/enums";
 import { AdminLoginDto, UpdateAccountDto, WechatLoginDto } from "./dto/auth.dto";
+import { FilesService } from "../files/files.service";
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly files: FilesService
   ) {}
 
   async wechatLogin(dto: WechatLoginDto, ip?: string, userAgent?: string) {
@@ -176,30 +178,42 @@ export class AuthService {
   }
 
   async updateAccount(accountId: string, activeRole: RoleCode, dto: UpdateAccountDto) {
-    const nickname = dto.nickname.trim().replace(/\s+/g, " ");
-    if (!nickname) throw new BadRequestException("昵称不能为空");
-    if (nickname.length > 30) throw new BadRequestException("昵称长度不能超过30个字符");
+    if (dto.nickname === undefined && dto.avatarObjectKey === undefined) {
+      throw new BadRequestException("请提供需要修改的昵称或头像");
+    }
+    const nickname = dto.nickname?.trim().replace(/\s+/g, " ");
+    if (dto.nickname !== undefined && !nickname) throw new BadRequestException("昵称不能为空");
+    if (nickname && nickname.length > 30) throw new BadRequestException("昵称长度不能超过30个字符");
+    const avatar = dto.avatarObjectKey
+      ? await this.files.assertAvatarObject(accountId, dto.avatarObjectKey)
+      : null;
 
     const updatedAccountId = await this.prisma.$transaction(async (tx) => {
       const current = await tx.account.findUniqueOrThrow({
         where: { id: accountId },
-        select: { id: true, nickname: true, status: true }
+        select: { id: true, nickname: true, avatarUrl: true, avatarObjectKey: true, status: true }
       });
       this.assertActive(current.status);
-      if (current.nickname === nickname) return current.id;
+      const nicknameChanged = nickname !== undefined && current.nickname !== nickname;
+      const avatarChanged = dto.avatarObjectKey !== undefined && current.avatarObjectKey !== dto.avatarObjectKey;
+      if (!nicknameChanged && !avatarChanged) return current.id;
 
       await tx.account.update({
         where: { id: accountId },
-        data: { nickname }
+        data: {
+          nickname,
+          avatarObjectKey: dto.avatarObjectKey,
+          avatarUrl: avatar?.publicUrl
+        }
       });
       await tx.auditLog.create({
         data: {
           actorId: accountId,
-          action: "account.nickname.update",
+          action: dto.avatarObjectKey && nickname ? "account.profile.update" : dto.avatarObjectKey ? "account.avatar.update" : "account.nickname.update",
           targetType: "Account",
           targetId: accountId,
-          before: { nickname: current.nickname },
-          after: { nickname }
+          before: { nickname: current.nickname, avatarObjectKey: current.avatarObjectKey },
+          after: { nickname: nickname ?? current.nickname, avatarObjectKey: dto.avatarObjectKey ?? current.avatarObjectKey }
         }
       });
       return current.id;

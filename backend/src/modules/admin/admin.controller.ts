@@ -69,6 +69,20 @@ export class AdminController {
     return this.admin.auditJob(actor.id, id, dto);
   }
 
+  @Get("job-revisions/audits")
+  jobRevisionAudits(@Query() query: AdminListDto) {
+    return this.admin.jobRevisionAudits(query);
+  }
+
+  @Patch("job-revisions/:id/audit")
+  auditJobRevision(
+    @CurrentUser() actor: RequestUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: AuditDecisionDto
+  ) {
+    return this.admin.auditJobRevision(actor.id, id, dto);
+  }
+
   @Get("applications")
   applications(@Query() query: AdminApplicationListDto) {
     return this.admin.applications(query);

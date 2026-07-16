@@ -95,6 +95,7 @@ model Account {
   passwordHash           String?              @db.VarChar(255)
   nickname               String               @default("微信用户") @db.VarChar(80)
   avatarUrl              String?              @db.VarChar(500)
+  avatarObjectKey        String?              @db.VarChar(500)
   phoneEncrypted         String?              @db.Text
   phoneHash              String?              @db.VarChar(128)
   status                 AccountStatus        @default(ACTIVE)
@@ -120,6 +121,8 @@ model Account {
   reviewStatusChanges    Review[]             @relation("ReviewStatusChanger")
   submittedReviewReports ReviewReport[]       @relation("ReviewReportReporter")
   resolvedReviewReports  ReviewReport[]       @relation("ReviewReportResolver")
+  requestedJobRevisions JobRevision[]         @relation("JobRevisionRequester")
+  reviewedJobRevisions  JobRevision[]         @relation("JobRevisionReviewer")
 
   @@map("accounts")
 }
@@ -153,6 +156,18 @@ model ParentProfile {
   address   String?  @db.VarChar(255)
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)
+  studentNickname  String?  @db.VarChar(64)
+  studentGender    String?  @db.VarChar(20)
+  studentGrade     String?  @db.VarChar(64)
+  schoolName       String?  @db.VarChar(128)
+  currentLevel     String?  @db.VarChar(255)
+  targetGoal       String?  @db.VarChar(255)
+  weakSubjects     String[] @default([])
+  learningGoals    String[] @default([])
+  learningStyle    String?  @db.VarChar(64)
+  personalityNotes String?  @db.VarChar(500)
+  preferredSchedule String[] @default([])
+  tutorExpectations String? @db.VarChar(1000)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
@@ -171,6 +186,15 @@ model TeacherProfile {
   hourlyRateCents  Int?
   subjects         String[]               @default([])
   serviceDistricts String[]               @default([])
+  serviceAreas     Json                   @default("[]")
+  displayTitle     String?                @db.VarChar(120)
+  teachingStyle    String?                @db.VarChar(1000)
+  teachingAchievements String?            @db.VarChar(1000)
+  examExperience   String?                @db.VarChar(1000)
+  languages        String[]               @default([])
+  availableTimes   String[]               @default([])
+  serviceModes     String[]               @default([])
+  lessonFormats    String[]               @default([])
   auditStatus      AuditStatus            @default(PENDING)
   auditNote        String?                @db.VarChar(500)
   submittedAt      DateTime?              @db.Timestamptz(3)
@@ -236,10 +260,34 @@ model JobPost {
   favorites        Favorite[]
   appointments     Appointment[]
   conversations    Conversation[]
+  revisions        JobRevision[]
 
   @@index([status, type, district, subject, publishedAt(sort: Desc)])
   @@index([ownerId, status, createdAt(sort: Desc)])
   @@map("job_posts")
+}
+
+model JobRevision {
+  id                       String      @id @default(uuid()) @db.Uuid
+  jobId                    String      @db.Uuid
+  requesterId              String      @db.Uuid
+  proposedData             Json
+  proposedContactEncrypted String?     @db.Text
+  contactChanged           Boolean     @default(false)
+  status                   AuditStatus @default(PENDING)
+  auditNote                String?     @db.VarChar(500)
+  version                  Int         @default(1)
+  reviewedAt               DateTime?   @db.Timestamptz(3)
+  reviewedById             String?     @db.Uuid
+  createdAt                DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime    @updatedAt @db.Timestamptz(3)
+  job                      JobPost     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  requester                Account     @relation("JobRevisionRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  reviewer                 Account?    @relation("JobRevisionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([jobId, createdAt(sort: Desc)])
+  @@map("job_revisions")
 }
 
 model Application {
@@ -256,6 +304,7 @@ model Application {
   job         JobPost           @relation(fields: [jobId], references: [id], onDelete: Cascade)
   teacher     Account           @relation("TeacherApplications", fields: [teacherId], references: [id], onDelete: Restrict)
   appointment Appointment?
+  conversation Conversation?
 
   @@unique([jobId, teacherId])
   @@index([teacherId, status, createdAt(sort: Desc)])
@@ -354,10 +403,12 @@ model Favorite {
 model Conversation {
   id         String               @id @default(uuid()) @db.Uuid
   jobId      String?              @db.Uuid
+  applicationId String?           @unique @db.Uuid
   contextKey String?              @unique @db.VarChar(160)
   createdAt  DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime             @updatedAt @db.Timestamptz(3)
   job        JobPost?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  application Application?        @relation(fields: [applicationId], references: [id], onDelete: SetNull)
   members    ConversationMember[]
   messages   Message[]
 

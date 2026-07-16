@@ -10,6 +10,22 @@ const total = ref(0);
 const query = reactive({ page: 1, pageSize: 20 });
 const dialog = reactive({ visible: false, item: null as any, status: "APPROVED" as "APPROVED" | "REJECTED", note: "" });
 
+interface ServiceArea {
+  province?: string;
+  city?: string;
+  district?: string;
+}
+
+function formatServiceAreas(areas: ServiceArea[] | null | undefined, districtsOnly = false) {
+  if (!Array.isArray(areas) || !areas.length) return "未设置";
+  return areas
+    .map((area) => districtsOnly
+      ? area.district
+      : [area.province, area.city, area.district].filter(Boolean).join("/"))
+    .filter(Boolean)
+    .join("、") || "未设置";
+}
+
 async function load() {
   loading.value = true;
   try {
@@ -67,6 +83,7 @@ onMounted(load);
       <el-table-column prop="education" label="学历" width="90" />
       <el-table-column prop="major" label="专业" min-width="130" />
       <el-table-column label="科目" min-width="150"><template #default="{ row }"><el-tag v-for="s in row.subjects" :key="s" effect="plain">{{ s }}</el-tag><span v-if="!row.subjects?.length" class="muted">未填写</span></template></el-table-column>
+      <el-table-column label="服务区域" min-width="180"><template #default="{ row }">{{ formatServiceAreas(row.serviceAreas, true) }}</template></el-table-column>
       <el-table-column label="教龄" width="85"><template #default="{ row }">{{ row.teachingYears }} 年</template></el-table-column>
       <el-table-column label="材料" width="90"><template #default="{ row }"><el-tag :type="row.certifications.length ? 'success' : 'warning'">{{ row.certifications.length }} 份</el-tag></template></el-table-column>
       <el-table-column label="操作" width="180" fixed="right"><template #default="{ row }"><el-button link type="success" :loading="actionId === row.accountId" :disabled="Boolean(actionId)" @click="openDecision(row, 'APPROVED')">通过</el-button><el-button link type="danger" :disabled="Boolean(actionId)" @click="openDecision(row, 'REJECTED')">拒绝</el-button></template></el-table-column>
@@ -76,7 +93,7 @@ onMounted(load);
   </section>
 
   <el-dialog v-model="dialog.visible" :title="dialog.status === 'APPROVED' ? '通过教师认证' : '拒绝教师认证'" width="min(560px, 92vw)" destroy-on-close>
-    <div class="decision-summary" v-if="dialog.item"><strong>{{ dialog.item.realName || dialog.item.account.nickname }}</strong><span>{{ dialog.item.school || '学校未填写' }} · {{ dialog.item.major || '专业未填写' }} · {{ dialog.item.certifications.length }} 份材料</span></div>
+    <div class="decision-summary" v-if="dialog.item"><strong>{{ dialog.item.displayTitle || dialog.item.realName || dialog.item.account.nickname }}</strong><span>{{ dialog.item.school || '学校未填写' }} · {{ dialog.item.major || '专业未填写' }} · {{ dialog.item.certifications.length }} 份材料</span><span>服务：{{ formatServiceAreas(dialog.item.serviceAreas) }}</span><span>教学方式：{{ dialog.item.teachingStyle || '未填写' }}</span><span>教学成果：{{ dialog.item.teachingAchievements || '未填写' }}</span></div>
     <el-form label-position="top"><el-form-item :label="dialog.status === 'REJECTED' ? '修改要求（必填）' : '审核说明'"><el-input v-model="dialog.note" type="textarea" :rows="4" maxlength="500" show-word-limit :placeholder="dialog.status === 'REJECTED' ? '请具体说明资料或材料存在的问题' : '可补充审核说明'" /></el-form-item></el-form>
     <template #footer><el-button :disabled="Boolean(actionId)" @click="dialog.visible = false">取消</el-button><el-button :type="dialog.status === 'APPROVED' ? 'success' : 'danger'" :loading="Boolean(actionId)" @click="submitDecision">确认{{ dialog.status === 'APPROVED' ? '通过' : '拒绝' }}</el-button></template>
   </el-dialog>

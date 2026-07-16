@@ -1,10 +1,10 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ApplicationStatus, JobStatus, JobType, RoleCode } from "../../generated/prisma/enums";
+import { ApplicationStatus, AuditStatus, JobStatus, JobType, RoleCode } from "../../generated/prisma/enums";
 import { RequestUser } from "../../common/interfaces/request-user";
 import { PrismaService } from "../../prisma/prisma.service";
-import { CONTACT_PATTERN, CreateJobDto, ListJobsDto, NearbyJobsDto, UpdateJobDto } from "./dto/jobs.dto";
+import { CONTACT_PATTERN, CreateJobDto, JobSort, ListJobsDto, NearbyJobsDto, UpdateJobDto } from "./dto/jobs.dto";
 
 @Injectable()
 export class JobsService {
@@ -12,20 +12,39 @@ export class JobsService {
 
   async list(query: ListJobsDto, accountId: string) {
     const limit = query.limit || 20;
+    if (query.minPriceCents !== undefined && query.maxPriceCents !== undefined && query.minPriceCents > query.maxPriceCents) {
+      throw new BadRequestException("最低课酬不能高于最高课酬");
+    }
+    const subjects = query.subjects?.length ? query.subjects : query.subject ? [query.subject] : undefined;
+    const grades = query.grades?.length ? query.grades : query.grade ? [query.grade] : undefined;
+    const orderBy = query.sort === JobSort.PRICE_ASC
+      ? [{ priceCents: "asc" as const }, { id: "asc" as const }]
+      : query.sort === JobSort.PRICE_DESC
+        ? [{ priceCents: "desc" as const }, { id: "desc" as const }]
+        : [{ publishedAt: "desc" as const }, { id: "desc" as const }];
     const jobs = await this.prisma.jobPost.findMany({
       where: {
         status: JobStatus.PUBLISHED,
         type: query.type,
         district: query.district,
-        grade: query.grade,
-        subject: query.subject,
+        grade: grades ? { in: grades } : undefined,
+        subject: subjects ? { in: subjects } : undefined,
+        settlement: query.settlement,
+        priceCents: query.minPriceCents !== undefined || query.maxPriceCents !== undefined ? {
+          gte: query.minPriceCents,
+          lte: query.maxPriceCents
+        } : undefined,
         ...(query.keyword ? {
           OR: [
             { title: { contains: query.keyword, mode: "insensitive" as const } },
             { description: { contains: query.keyword, mode: "insensitive" as const } },
+            { studentInfo: { contains: query.keyword, mode: "insensitive" as const } },
+            { grade: { contains: query.keyword, mode: "insensitive" as const } },
+            { subject: { contains: query.keyword, mode: "insensitive" as const } },
             { area: { contains: query.keyword, mode: "insensitive" as const } },
             { city: { contains: query.keyword, mode: "insensitive" as const } },
-            { district: { contains: query.keyword, mode: "insensitive" as const } }
+            { district: { contains: query.keyword, mode: "insensitive" as const } },
+            { owner: { nickname: { contains: query.keyword, mode: "insensitive" as const } } }
           ]
         } : {})
       },
@@ -35,13 +54,21 @@ export class JobsService {
             id: true,
             nickname: true,
             avatarUrl: true,
-            preference: { select: { privacyMode: true } }
+            preference: { select: { privacyMode: true } },
+            teacherProfile: {
+              select: {
+                displayTitle: true, school: true, major: true, education: true, teachingYears: true,
+                subjects: true, serviceAreas: true, teachingStyle: true, teachingAchievements: true,
+                examExperience: true, languages: true, availableTimes: true, serviceModes: true,
+                lessonFormats: true, bio: true, auditStatus: true
+              }
+            }
           }
         },
         favorites: { where: { accountId }, select: { accountId: true } },
         applications: { where: { teacherId: accountId }, take: 1 }
       },
-      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      orderBy,
       take: limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {})
     });
@@ -164,7 +191,15 @@ export class JobsService {
             id: true,
             nickname: true,
             avatarUrl: true,
-            preference: { select: { privacyMode: true } }
+            preference: { select: { privacyMode: true } },
+            teacherProfile: {
+              select: {
+                displayTitle: true, school: true, major: true, education: true, teachingYears: true,
+                subjects: true, serviceAreas: true, teachingStyle: true, teachingAchievements: true,
+                examExperience: true, languages: true, availableTimes: true, serviceModes: true,
+                lessonFormats: true, bio: true, auditStatus: true
+              }
+            }
           }
         },
         favorites: { where: { accountId }, select: { accountId: true } },
@@ -188,11 +223,20 @@ export class JobsService {
             id: true,
             nickname: true,
             avatarUrl: true,
-            preference: { select: { privacyMode: true } }
+            preference: { select: { privacyMode: true } },
+            teacherProfile: {
+              select: {
+                displayTitle: true, school: true, major: true, education: true, teachingYears: true,
+                subjects: true, serviceAreas: true, teachingStyle: true, teachingAchievements: true,
+                examExperience: true, languages: true, availableTimes: true, serviceModes: true,
+                lessonFormats: true, bio: true, auditStatus: true
+              }
+            }
           }
         },
         favorites: { where: { accountId: ownerId }, select: { accountId: true } },
-        applications: { where: { teacherId: ownerId }, take: 1 }
+        applications: { where: { teacherId: ownerId }, take: 1 },
+        revisions: { where: { status: AuditStatus.PENDING }, orderBy: { createdAt: "desc" }, take: 1 }
       },
       orderBy: { createdAt: "desc" }
     });
@@ -219,7 +263,15 @@ export class JobsService {
                 id: true,
                 nickname: true,
                 avatarUrl: true,
-                preference: { select: { privacyMode: true } }
+                preference: { select: { privacyMode: true } },
+                teacherProfile: {
+                  select: {
+                    displayTitle: true, school: true, major: true, education: true, teachingYears: true,
+                    subjects: true, serviceAreas: true, teachingStyle: true, teachingAchievements: true,
+                    examExperience: true, languages: true, availableTimes: true, serviceModes: true,
+                    lessonFormats: true, bio: true, auditStatus: true
+                  }
+                }
               }
             },
             favorites: { where: { accountId }, select: { accountId: true } },
@@ -326,6 +378,67 @@ export class JobsService {
       const latitude = online ? null : dto.latitude;
       const longitude = online ? null : dto.longitude;
       const contact = dto.contact === undefined ? undefined : this.normalizeContact(dto.contact);
+      if (before.status === JobStatus.PUBLISHED) {
+        if (before.version !== version) throw new ConflictException("记录已变化，请刷新后重试");
+        const pendingRevision = await tx.jobRevision.findFirst({
+          where: { jobId: id, status: AuditStatus.PENDING },
+          select: { id: true }
+        });
+        if (pendingRevision) throw new ConflictException("已有修改申请等待审核，请先等待平台处理");
+        const proposedLatitude = online
+          ? null
+          : coordinatePairProvided
+            ? dto.latitude!
+            : this.numberOrNull(before.latitude);
+        const proposedLongitude = online
+          ? null
+          : coordinatePairProvided
+            ? dto.longitude!
+            : this.numberOrNull(before.longitude);
+        const proposedData = {
+          title: dto.title === undefined ? before.title : this.requiredText(dto.title, "标题"),
+          province,
+          city,
+          district,
+          area: dto.area === undefined ? before.area : this.nullableText(dto.area),
+          grade: dto.grade === undefined ? before.grade : this.requiredText(dto.grade, "年级"),
+          subject: dto.subject === undefined ? before.subject : this.requiredText(dto.subject, "科目"),
+          priceCents: dto.priceCents ?? before.priceCents,
+          priceUnit: dto.priceUnit === undefined ? before.priceUnit : this.requiredText(dto.priceUnit, "计价单位"),
+          settlement: dto.settlement === undefined ? before.settlement : this.requiredText(dto.settlement, "结算方式"),
+          schedule: dto.schedule === undefined ? before.schedule : this.requiredText(dto.schedule, "授课时间"),
+          description: dto.description === undefined ? before.description : this.requiredText(dto.description, "描述"),
+          studentInfo: dto.studentInfo === undefined ? before.studentInfo : this.nullableText(dto.studentInfo),
+          address,
+          capacity: dto.capacity ?? before.capacity,
+          latitude: proposedLatitude,
+          longitude: proposedLongitude
+        };
+        const revision = await tx.jobRevision.create({
+          data: {
+            jobId: id,
+            requesterId: user.id,
+            proposedData,
+            proposedContactEncrypted: contact === undefined ? null : contact ? this.encrypt(contact) : null,
+            contactChanged: contact !== undefined
+          }
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: "job.revision.request",
+            targetType: "JobRevision",
+            targetId: revision.id,
+            before: { jobId: id, jobVersion: before.version },
+            after: { status: revision.status, revisionVersion: revision.version }
+          }
+        });
+        return {
+          ...this.present(before, user.id),
+          revisionPending: true,
+          pendingRevision: revision
+        };
+      }
       const result = await tx.jobPost.updateMany({
         where: { id, ownerId: user.id, version, status: { in: [JobStatus.DRAFT, JobStatus.PENDING, JobStatus.REJECTED] } },
         data: {
@@ -498,6 +611,7 @@ export class JobsService {
       contactEncrypted: _contactEncrypted,
       favorites,
       applications,
+      revisions,
       owner,
       privacyMode: rawPrivacyMode,
       ...safeJob
@@ -523,9 +637,15 @@ export class JobsService {
       longitude: canViewPreciseLocation ? longitude : this.approximateCoordinate(longitude),
       ...(distanceMeters === undefined ? {} : { distanceMeters }),
       locationApproximate: !canViewPreciseLocation,
-      owner: owner ? { id: owner.id, nickname: owner.nickname, avatarUrl: owner.avatarUrl } : undefined,
+      owner: owner ? {
+        id: owner.id,
+        nickname: owner.nickname,
+        avatarUrl: owner.avatarUrl,
+        teacherProfile: owner.teacherProfile?.auditStatus === "APPROVED" ? owner.teacherProfile : null
+      } : undefined,
       favorite: Boolean(favorites?.length),
-      currentApplication
+      currentApplication,
+      pendingRevision: revisions?.[0] || null
     };
   }
 

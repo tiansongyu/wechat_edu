@@ -1,14 +1,31 @@
-import { Type } from "class-transformer";
-import { IsEnum, IsInt, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { Transform, Type } from "class-transformer";
+import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { JobType } from "../../../generated/prisma/enums";
 
 export const CONTACT_PATTERN = /^(?=.*[\p{L}\p{N}])[\p{L}\p{N}@._+%#:/：()（）\- ]+$/u;
+
+export enum JobSort {
+  LATEST = "LATEST",
+  PRICE_ASC = "PRICE_ASC",
+  PRICE_DESC = "PRICE_DESC"
+}
+
+function csvList(value: unknown) {
+  const source = Array.isArray(value) ? value : String(value || "").split(",");
+  return source.map((item) => String(item).trim()).filter(Boolean);
+}
 
 export class ListJobsDto {
   @IsOptional() @IsEnum(JobType) type?: JobType;
   @IsOptional() @IsString() @MaxLength(64) district?: string;
   @IsOptional() @IsString() @MaxLength(64) grade?: string;
   @IsOptional() @IsString() @MaxLength(64) subject?: string;
+  @IsOptional() @Transform(({ value }) => csvList(value)) @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) subjects?: string[];
+  @IsOptional() @Transform(({ value }) => csvList(value)) @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) grades?: string[];
+  @IsOptional() @IsString() @MaxLength(32) settlement?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100000000) minPriceCents?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100000000) maxPriceCents?: number;
+  @IsOptional() @IsEnum(JobSort) sort: JobSort = JobSort.LATEST;
   @IsOptional() @IsString() @MaxLength(120) keyword?: string;
   @IsOptional() @IsUUID() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit = 20;

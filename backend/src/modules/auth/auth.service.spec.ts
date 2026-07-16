@@ -8,7 +8,7 @@ describe("AuthService WeChat identity exchange", () => {
 
   function service(config: Record<string, string>) {
     const configService = { get: (key: string) => config[key] } as ConfigService;
-    return new AuthService({} as any, {} as any, configService);
+    return new AuthService({} as any, {} as any, configService, {} as any);
   }
 
   it("exchanges a wx.login code through the real code2Session endpoint", async () => {
@@ -56,6 +56,7 @@ describe("AuthService WeChat identity exchange", () => {
       id: "account-1",
       nickname: "旧昵称",
       avatarUrl: null,
+      avatarObjectKey: null,
       status: AccountStatus.ACTIVE,
       lastLoginAt: null,
       loginCount: 1,
@@ -74,13 +75,17 @@ describe("AuthService WeChat identity exchange", () => {
       account: { findUniqueOrThrow: jest.fn().mockResolvedValue({ ...current, nickname: "新 昵称" }) },
       $transaction: jest.fn((callback) => callback(tx))
     };
-    const auth = new AuthService(prisma as any, {} as any, { get: jest.fn() } as any);
+    const auth = new AuthService(prisma as any, {} as any, { get: jest.fn() } as any, {} as any);
 
     await expect(auth.updateAccount("account-1", RoleCode.PARENT, { nickname: "  新   昵称  " }))
       .resolves.toMatchObject({ nickname: "新 昵称", activeRole: RoleCode.PARENT });
-    expect(tx.account.update).toHaveBeenCalledWith(expect.objectContaining({ data: { nickname: "新 昵称" } }));
+    expect(tx.account.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ nickname: "新 昵称" }) }));
     expect(tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ action: "account.nickname.update", before: { nickname: "旧昵称" }, after: { nickname: "新 昵称" } })
+      data: expect.objectContaining({
+        action: "account.nickname.update",
+        before: expect.objectContaining({ nickname: "旧昵称" }),
+        after: expect.objectContaining({ nickname: "新 昵称" })
+      })
     }));
   });
 });

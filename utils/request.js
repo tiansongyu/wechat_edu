@@ -23,6 +23,23 @@ function messageFrom(data, fallback) {
   return data.message || data.error || fallback;
 }
 
+function normalizeMediaUrls(value) {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    value.forEach((item) => normalizeMediaUrls(item));
+    return value;
+  }
+  Object.keys(value).forEach((key) => {
+    const item = value[key];
+    if (key === "avatarUrl" && typeof item === "string" && item.startsWith("/")) {
+      value[key] = `${API_BASE_URL}${item}`;
+    } else if (item && typeof item === "object") {
+      normalizeMediaUrls(item);
+    }
+  });
+  return value;
+}
+
 function wxRequest(options) {
   return new Promise((resolve, reject) => {
     wx.request({
@@ -34,7 +51,7 @@ function wxRequest(options) {
       },
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve(response.data);
+          resolve(normalizeMediaUrls(response.data));
           return;
         }
         const error = new Error(messageFrom(response.data, `请求失败（${response.statusCode}）`));

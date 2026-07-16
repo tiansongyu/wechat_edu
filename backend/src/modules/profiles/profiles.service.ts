@@ -16,7 +16,19 @@ export class ProfilesService {
   }
 
   async updateTeacher(accountId: string, dto: UpdateTeacherProfileDto) {
-    const { version, ...data } = dto;
+    const { version, serviceAreas, ...profileData } = dto;
+    const normalizedServiceAreas = serviceAreas?.map((area) => ({
+      province: area.province.trim(),
+      city: area.city.trim(),
+      district: area.district.trim()
+    })).filter((area) => area.province && area.city && area.district);
+    const data = {
+      ...profileData,
+      ...(normalizedServiceAreas ? {
+        serviceAreas: normalizedServiceAreas,
+        serviceDistricts: normalizedServiceAreas.map((area) => `${area.province} / ${area.city} / ${area.district}`)
+      } : {})
+    };
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.teacherProfile.findUnique({ where: { accountId } });
       if (!current || current.version !== version) throw new ConflictException("资料已被修改，请刷新后重试");

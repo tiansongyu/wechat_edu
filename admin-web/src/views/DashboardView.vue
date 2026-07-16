@@ -49,6 +49,7 @@ onMounted(async () => {
         <div class="todo-list">
           <router-link to="/teacher-audits"><span class="todo-dot todo-dot--blue"></span><div><strong>教师认证审核</strong><small>核验身份、学校与资质材料</small></div><b>{{ metrics.pendingTeachers || 0 }}</b></router-link>
           <router-link to="/job-audits"><span class="todo-dot todo-dot--orange"></span><div><strong>家教发布审核</strong><small>检查内容、价格与联系方式</small></div><b>{{ metrics.pendingJobs || 0 }}</b></router-link>
+          <router-link to="/job-audits"><span class="todo-dot todo-dot--blue"></span><div><strong>已发布内容修改</strong><small>对比原内容和拟修改内容，通过后才生效</small></div><b>{{ metrics.pendingJobRevisions || 0 }}</b></router-link>
         </div>
       </section>
       <section class="content-card">

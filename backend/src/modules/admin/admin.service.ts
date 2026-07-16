@@ -17,13 +17,14 @@ export class AdminService {
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   async dashboard() {
-    const [users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingApplications, recentJobs] =
+    const [users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingJobRevisions, pendingApplications, recentJobs] =
       await Promise.all([
         this.prisma.account.count({ where: { roles: { some: { roleCode: { in: [RoleCode.PARENT, RoleCode.TEACHER] } } } } }),
         this.prisma.teacherProfile.count({ where: { auditStatus: AuditStatus.APPROVED } }),
         this.prisma.teacherProfile.count({ where: { auditStatus: AuditStatus.PENDING, submittedAt: { not: null } } }),
         this.prisma.jobPost.count({ where: { status: JobStatus.PUBLISHED } }),
         this.prisma.jobPost.count({ where: { status: JobStatus.PENDING } }),
+        this.prisma.jobRevision.count({ where: { status: AuditStatus.PENDING } }),
         this.prisma.application.count({ where: { status: ApplicationStatus.PENDING } }),
         this.prisma.jobPost.groupBy({
           by: ["status"],
@@ -32,7 +33,7 @@ export class AdminService {
         })
       ]);
     return {
-      metrics: { users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingApplications },
+      metrics: { users, approvedTeachers, pendingTeachers, publishedJobs, pendingJobs, pendingJobRevisions, pendingApplications },
       jobStatusDistribution: recentJobs.map((item) => ({ status: item.status, count: item._count._all })),
       integrations: {
         wechatLogin: this.config.get<string>("WECHAT_LOGIN_MOCK") === "true" ? "MOCK" : "LIVE",
@@ -236,6 +237,123 @@ export class AdminService {
           targetId: jobId,
           before: { status: before.status, note: before.auditNote, version: before.version },
           after: { status: nextStatus, note: dto.note || null }
+        }
+      });
+      return updated;
+    });
+  }
+
+  async jobRevisionAudits(query: AdminListDto) {
+    const where = {
+      status: AuditStatus.PENDING,
+      ...(query.keyword ? {
+        OR: [
+          { job: { title: { contains: query.keyword, mode: "insensitive" as const } } },
+          { requester: { nickname: { contains: query.keyword, mode: "insensitive" as const } } }
+        ]
+      } : {})
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.jobRevision.findMany({
+        where,
+        include: {
+          job: { include: { owner: { select: { id: true, nickname: true, avatarUrl: true } } } },
+          requester: { select: { id: true, nickname: true, avatarUrl: true } }
+        },
+        orderBy: { createdAt: "asc" },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize
+      }),
+      this.prisma.jobRevision.count({ where })
+    ]);
+    return { items, total, page: query.page, pageSize: query.pageSize };
+  }
+
+  async auditJobRevision(actorId: string, revisionId: string, dto: AuditDecisionDto) {
+    if (dto.status === AuditStatus.PENDING) throw new BadRequestException("请选择通过或拒绝");
+    if (dto.status === AuditStatus.REJECTED && !dto.note?.trim()) throw new BadRequestException("拒绝必须填写原因");
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(`SELECT id FROM job_revisions WHERE id = $1::uuid FOR UPDATE`, revisionId);
+      const revision = await tx.jobRevision.findUnique({
+        where: { id: revisionId },
+        include: { job: true }
+      });
+      if (!revision) throw new NotFoundException("修改申请不存在");
+      if (revision.status !== AuditStatus.PENDING || revision.version !== (dto.version ?? revision.version)) {
+        throw new ConflictException("修改申请已被其他管理员处理，请刷新后重试");
+      }
+
+      const proposed = revision.proposedData as Record<string, unknown>;
+      if (dto.status === AuditStatus.APPROVED) {
+        await tx.jobPost.update({
+          where: { id: revision.jobId },
+          data: {
+            title: String(proposed.title),
+            province: proposed.province === null ? null : String(proposed.province),
+            city: proposed.city === null ? null : String(proposed.city),
+            district: String(proposed.district),
+            area: proposed.area === null ? null : String(proposed.area),
+            grade: String(proposed.grade),
+            subject: String(proposed.subject),
+            priceCents: Number(proposed.priceCents),
+            priceUnit: String(proposed.priceUnit),
+            settlement: String(proposed.settlement),
+            schedule: String(proposed.schedule),
+            description: String(proposed.description),
+            studentInfo: proposed.studentInfo === null ? null : String(proposed.studentInfo),
+            address: proposed.address === null ? null : String(proposed.address),
+            capacity: Number(proposed.capacity),
+            latitude: proposed.latitude === null ? null : Number(proposed.latitude),
+            longitude: proposed.longitude === null ? null : Number(proposed.longitude),
+            contactEncrypted: revision.contactChanged ? revision.proposedContactEncrypted : undefined,
+            version: { increment: 1 }
+          }
+        });
+        if (proposed.latitude === null || proposed.longitude === null) {
+          await tx.$executeRawUnsafe(`UPDATE job_posts SET location = NULL WHERE id = $1::uuid`, revision.jobId);
+        } else {
+          await tx.$executeRawUnsafe(
+            `UPDATE job_posts SET location = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography WHERE id = $3::uuid`,
+            Number(proposed.longitude),
+            Number(proposed.latitude),
+            revision.jobId
+          );
+        }
+      }
+
+      const updated = await tx.jobRevision.update({
+        where: { id: revisionId },
+        data: {
+          status: dto.status,
+          auditNote: dto.note?.trim() || null,
+          reviewedAt: new Date(),
+          reviewedById: actorId,
+          version: { increment: 1 }
+        }
+      });
+      const preference = await tx.userPreference.findUnique({
+        where: { accountId: revision.requesterId },
+        select: { jobNotice: true }
+      });
+      if (preference?.jobNotice !== false) {
+        await tx.notification.create({
+          data: {
+            accountId: revision.requesterId,
+            type: "AUDIT",
+            title: dto.status === AuditStatus.APPROVED ? "发布修改已通过" : "发布修改需要调整",
+            content: dto.note || (dto.status === AuditStatus.APPROVED ? "新的发布信息已经生效。" : "请按审核意见重新提交。"),
+            data: { jobId: revision.jobId, revisionId }
+          }
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "job.revision.audit",
+          targetType: "JobRevision",
+          targetId: revisionId,
+          before: { status: revision.status, version: revision.version, jobVersion: revision.job.version },
+          after: { status: dto.status, note: dto.note || null, applied: dto.status === AuditStatus.APPROVED }
         }
       });
       return updated;

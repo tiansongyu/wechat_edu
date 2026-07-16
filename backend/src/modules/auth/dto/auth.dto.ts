@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, MaxLength } from "class-validator";
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length, Matches, MaxLength } from "class-validator";
 import { RoleCode } from "../../../generated/prisma/enums";
 
 export class WechatLoginDto {
@@ -51,8 +51,15 @@ export class SwitchRoleDto {
 }
 
 export class UpdateAccountDto {
+  @IsOptional()
   @Transform(({ value }) => typeof value === "string" ? value.trim().replace(/\s+/g, " ") : value)
   @IsString({ message: "昵称格式不正确" })
   @Length(1, 30, { message: "昵称长度应为1到30个字符" })
-  nickname: string;
+  nickname?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  @Matches(/^avatars\/[a-zA-Z0-9-]+\/.+/)
+  avatarObjectKey?: string;
 }
