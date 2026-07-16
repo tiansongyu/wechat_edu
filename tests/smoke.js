@@ -91,7 +91,9 @@ assert.match(homeTemplate, /data-subject="{{item\.label}}" bindtap="chooseSubjec
 assert.match(homeSource, /setTimeout\(\(\) => this\.loadData\(false\), 350\)/, "search must debounce API requests");
 assert.match(homeSource, /loadSequence !== this\._loadSequence/, "stale search responses must not overwrite newer results");
 assert.match(homeSource, /subjects: selectedSubjects\.length \? selectedSubjects\.join\(","\)/, "subject filters must support multiple values");
-assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*82rpx;[^}]*min-width:\s*82rpx;[^}]*height:\s*82rpx;/s, "favorite and share actions must remain square");
+assert.match(homeStyle, /\.job-card__actions\s*\{[^}]*justify-content:\s*center;[^}]*gap:\s*12rpx;/s, "job actions should use a compact centered layout");
+assert.match(homeStyle, /\.apply-button\s*\{[^}]*flex:\s*0 1 auto;[^}]*min-width:\s*210rpx;[^}]*max-width:\s*250rpx;/s, "primary job action should not stretch across the card");
+assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*76rpx;[^}]*min-width:\s*76rpx;[^}]*height:\s*76rpx;/s, "favorite and share actions must remain compact squares");
 assert.match(profileTemplate, /open-type="chooseAvatar"/);
 assert.match(profileSource, /purpose:\s*"AVATAR"/);
 assert.match(profileSource, /avatarObjectKey:\s*signed\.objectKey/);
