@@ -26,8 +26,16 @@
         <view class="cert-field"><text>参考课酬</text><input value="{{form.hourlyRate}}" type="number" data-field="hourlyRate" placeholder="元/小时" bindinput="handleInput" /></view>
       </view>
       <view class="cert-field"><text>擅长科目 *</text><input value="{{form.subjects}}" data-field="subjects" placeholder="数学、物理（用顿号分隔）" bindinput="handleInput" /></view>
-      <view class="cert-field"><text>服务区域</text><picker mode="region" value="{{serviceRegionValue}}" bindchange="addServiceRegion"><view class="service-region-picker">＋ 使用省市区滚动控件添加服务区域</view></picker><view class="service-region-list"><view class="service-region-tag" wx:for="{{form.serviceDistricts}}" wx:key="*this"><text>{{item}}</text><text data-region="{{item}}" bindtap="removeServiceRegion">×</text></view><text class="service-region-empty" wx:if="{{!form.serviceDistricts.length}}">尚未选择服务区域</text></view></view>
+      <view class="cert-field"><text>对外展示标题</text><input value="{{form.displayTitle}}" data-field="displayTitle" maxlength="120" placeholder="例如：5年初高中数学提分老师" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>服务区域</text><picker mode="region" value="{{serviceRegionValue}}" bindchange="addServiceRegion"><view class="service-region-picker">＋ 使用省 / 市 / 区滚动控件添加</view></picker><view class="service-region-list"><view class="service-region-tag" wx:for="{{form.serviceAreas}}" wx:key="label"><text>{{item.label}}</text><text data-index="{{index}}" bindtap="removeServiceRegion">×</text></view><text class="service-region-empty" wx:if="{{!form.serviceAreas.length}}">尚未选择服务区域</text></view></view>
+      <view class="cert-field"><text>授课方式（可多项）</text><input value="{{form.serviceModes}}" data-field="serviceModes" placeholder="上门、在线、到老师处" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>可授课时间（可多项）</text><input value="{{form.availableTimes}}" data-field="availableTimes" placeholder="工作日晚间、周六上午" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>语言能力（可多项）</text><input value="{{form.languages}}" data-field="languages" placeholder="普通话、英语" bindinput="handleInput" /></view>
+      <view class="cert-field"><text>课程形式（可多项）</text><input value="{{form.lessonFormats}}" data-field="lessonFormats" placeholder="一对一、小班、作业答疑" bindinput="handleInput" /></view>
       <view class="cert-field"><text>个人简介</text><textarea value="{{form.bio}}" data-field="bio" maxlength="500" placeholder="介绍教学经验和教学方法" bindinput="handleInput"></textarea></view>
+      <view class="cert-field"><text>教学风格</text><textarea value="{{form.teachingStyle}}" data-field="teachingStyle" maxlength="1000" placeholder="如何诊断问题、讲解与反馈" bindinput="handleInput"></textarea></view>
+      <view class="cert-field"><text>教学成果</text><textarea value="{{form.teachingAchievements}}" data-field="teachingAchievements" maxlength="1000" placeholder="用匿名、可验证的方式描述代表性成果" bindinput="handleInput"></textarea></view>
+      <view class="cert-field"><text>考试与课程经验</text><textarea value="{{form.examExperience}}" data-field="examExperience" maxlength="1000" placeholder="熟悉的教材版本、考试体系或竞赛经验" bindinput="handleInput"></textarea></view>
     </view>
 
     <view class="cert-card">

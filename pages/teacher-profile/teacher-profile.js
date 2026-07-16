@@ -9,7 +9,11 @@ Page({
     auditStatusLabel: "尚未提交审核",
     auditStatusTone: "UNSUBMITTED",
     serviceRegionValue: ["广东省", "深圳市", "南山区"],
-    form: { realName: "", school: "", major: "", education: "", teachingYears: "0", hourlyRate: "", subjects: "", serviceDistricts: [], bio: "" },
+    form: {
+      realName: "", school: "", major: "", education: "", teachingYears: "0", hourlyRate: "", subjects: "",
+      serviceAreas: [], bio: "", displayTitle: "", teachingStyle: "", teachingAchievements: "",
+      examExperience: "", languages: "", availableTimes: "", serviceModes: "", lessonFormats: ""
+    },
     certifications: []
   },
 
@@ -21,6 +25,13 @@ Page({
       await getApp().ensureAuth();
       const profile = await api.getTeacherProfile();
       const submitted = Boolean(profile.submittedAt);
+      const structuredAreas = Array.isArray(profile.serviceAreas) ? profile.serviceAreas : [];
+      const serviceAreas = structuredAreas.length
+        ? structuredAreas.map((area) => ({ ...area, label: [area.province, area.city, area.district].filter(Boolean).join(" / ") }))
+        : (profile.serviceDistricts || []).map((label) => {
+            const parts = String(label).split(/\s*\/\s*/);
+            return { province: parts[0] || "", city: parts[1] || "", district: parts[2] || parts[0] || "", label };
+          });
       this.setData({
         profile,
         auditStatusLabel: !submitted
@@ -36,8 +47,16 @@ Page({
           teachingYears: String(profile.teachingYears || 0),
           hourlyRate: profile.hourlyRateCents ? String(profile.hourlyRateCents / 100) : "",
           subjects: (profile.subjects || []).join("、"),
-          serviceDistricts: profile.serviceDistricts || [],
-          bio: profile.bio || ""
+          serviceAreas,
+          bio: profile.bio || "",
+          displayTitle: profile.displayTitle || "",
+          teachingStyle: profile.teachingStyle || "",
+          teachingAchievements: profile.teachingAchievements || "",
+          examExperience: profile.examExperience || "",
+          languages: (profile.languages || []).join("、"),
+          availableTimes: (profile.availableTimes || []).join("、"),
+          serviceModes: (profile.serviceModes || []).join("、"),
+          lessonFormats: (profile.lessonFormats || []).join("、")
         }
       });
     } catch (error) {
@@ -54,15 +73,17 @@ Page({
   addServiceRegion(event) {
     const selected = event.detail.value || [];
     const label = selected.join(" / ");
-    const serviceDistricts = this.data.form.serviceDistricts.slice();
-    if (label && !serviceDistricts.includes(label)) serviceDistricts.push(label);
-    this.setData({ serviceRegionValue: selected, "form.serviceDistricts": serviceDistricts });
+    const serviceAreas = this.data.form.serviceAreas.slice();
+    if (label && !serviceAreas.some((area) => area.label === label)) {
+      serviceAreas.push({ province: selected[0], city: selected[1], district: selected[2], label });
+    }
+    this.setData({ serviceRegionValue: selected, "form.serviceAreas": serviceAreas });
   },
 
   removeServiceRegion(event) {
-    const target = event.currentTarget.dataset.region;
+    const target = Number(event.currentTarget.dataset.index);
     this.setData({
-      "form.serviceDistricts": this.data.form.serviceDistricts.filter((item) => item !== target)
+      "form.serviceAreas": this.data.form.serviceAreas.filter((_, index) => index !== target)
     });
   },
 
@@ -88,8 +109,16 @@ Page({
         teachingYears,
         hourlyRateCents: form.hourlyRate ? Math.round(hourlyRate * 100) : undefined,
         subjects: this.splitList(form.subjects),
-        serviceDistricts: form.serviceDistricts.slice(),
+        serviceAreas: form.serviceAreas.map(({ province, city, district }) => ({ province, city, district })),
         bio: form.bio.trim(),
+        displayTitle: form.displayTitle.trim() || undefined,
+        teachingStyle: form.teachingStyle.trim() || undefined,
+        teachingAchievements: form.teachingAchievements.trim() || undefined,
+        examExperience: form.examExperience.trim() || undefined,
+        languages: this.splitList(form.languages),
+        availableTimes: this.splitList(form.availableTimes),
+        serviceModes: this.splitList(form.serviceModes),
+        lessonFormats: this.splitList(form.lessonFormats),
         version: profile.version
       });
       getApp().globalData.account = null;

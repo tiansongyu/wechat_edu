@@ -112,21 +112,21 @@ export class CommunicationsService {
       if (user.id === job.ownerId) {
         if (activeRole !== RoleCode.PARENT) throw new ForbiddenException("请切换到家长角色后联系老师");
         const accepted = await this.prisma.application.findFirst({
-          where: { jobId, teacherId: memberId, status: ApplicationStatus.ACCEPTED },
+          where: { jobId, teacherId: memberId, status: { in: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED] } },
           select: { id: true }
         });
-        if (!accepted) throw new ForbiddenException("只能联系该需求已录用的老师");
+        if (!accepted) throw new ForbiddenException("只能联系该需求的有效申请老师");
         parentId = user.id;
         teacherId = memberId;
       } else {
         if (activeRole !== RoleCode.TEACHER || memberId !== job.ownerId) {
-          throw new ForbiddenException("只能联系已录用需求的发布者");
+          throw new ForbiddenException("只能联系已申请需求的发布者");
         }
         const accepted = await this.prisma.application.findFirst({
-          where: { jobId, teacherId: user.id, status: ApplicationStatus.ACCEPTED },
+          where: { jobId, teacherId: user.id, status: { in: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED] } },
           select: { id: true }
         });
-        if (!accepted) throw new ForbiddenException("报名被录用后才能联系发布者");
+        if (!accepted) throw new ForbiddenException("提交有效申请后才能联系发布者");
         parentId = memberId;
         teacherId = user.id;
       }

@@ -72,7 +72,8 @@ function normalizeApplications(response) {
       coverLetter: application.coverLetter || "",
       statusNote: application.statusNote || application.note || "",
       createdLabel: formatDate(application.createdAt),
-      handledLabel: application.handledAt ? formatDate(application.handledAt) : ""
+      handledLabel: application.handledAt ? formatDate(application.handledAt) : "",
+      conversationId: application.conversationId || (application.conversation && application.conversation.id) || ""
     };
   });
 }
@@ -256,7 +257,7 @@ Page({
 
   async contactTeacher(event) {
     const application = this.data.applications.find((item) => item.id === event.currentTarget.dataset.id);
-    if (!application || application.status !== "ACCEPTED" || !application.teacherId || this.data.actionId) return;
+    if (!application || !["PENDING", "ACCEPTED"].includes(application.status) || !application.teacherId || this.data.actionId) return;
     this.setData({ actionId: application.id, actionType: "contact" });
     try {
       const conversation = await api.startConversation(application.teacherId, this.data.jobId);

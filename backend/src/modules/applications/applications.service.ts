@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { createHash } from "crypto";
-import { ApplicationStatus, AuditStatus, JobStatus, JobType } from "../../generated/prisma/enums";
+import { ApplicationStatus, AuditStatus, JobStatus, JobType, RoleCode } from "../../generated/prisma/enums";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ApplyJobDto } from "./dto/applications.dto";
 
@@ -121,6 +121,41 @@ export class ApplicationsService {
       if (!existingApplication) {
         await tx.jobPost.update({ where: { id: jobId }, data: { applicationCount: { increment: 1 } } });
       }
+      const contextKey = `job:${jobId}:parent:${job.ownerId}:teacher:${teacherId}`;
+      const conversation = await tx.conversation.upsert({
+        where: { contextKey },
+        update: { applicationId: application.id },
+        create: {
+          jobId,
+          applicationId: application.id,
+          contextKey,
+          members: {
+            create: [
+              { accountId: job.ownerId, role: RoleCode.PARENT },
+              { accountId: teacherId, role: RoleCode.TEACHER }
+            ]
+          }
+        }
+      });
+      if (coverLetter) {
+        await tx.message.upsert({
+          where: {
+            conversationId_senderId_clientMessageId: {
+              conversationId: conversation.id,
+              senderId: teacherId,
+              clientMessageId: application.id
+            }
+          },
+          update: { content: coverLetter },
+          create: {
+            conversationId: conversation.id,
+            senderId: teacherId,
+            clientMessageId: application.id,
+            content: coverLetter
+          }
+        });
+        await tx.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+      }
       await tx.outboxEvent.create({
         data: {
           aggregateType: "Application",
@@ -132,6 +167,7 @@ export class ApplicationsService {
       const response = {
         id: application.id,
         jobId,
+        conversationId: conversation.id,
         status: application.status,
         createdAt: application.createdAt.toISOString()
       };
@@ -163,6 +199,7 @@ export class ApplicationsService {
     const applications = await this.prisma.application.findMany({
       where: { teacherId },
       include: {
+        conversation: { select: { id: true } },
         job: {
           include: {
             owner: {
@@ -205,6 +242,7 @@ export class ApplicationsService {
     return this.prisma.application.findMany({
       where: { jobId },
       include: {
+        conversation: { select: { id: true } },
         teacher: {
           select: {
             id: true,
@@ -223,6 +261,7 @@ export class ApplicationsService {
       where: { job: { ownerId } },
       include: {
         job: true,
+        conversation: { select: { id: true } },
         teacher: { select: { id: true, nickname: true, avatarUrl: true, teacherProfile: true } },
         appointment: true
       },

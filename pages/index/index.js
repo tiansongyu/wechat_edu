@@ -3,8 +3,8 @@ const api = require("../../utils/api");
 const FILTERS = {
   district: ["全市区", "南山区", "福田区", "宝安区", "龙华区", "罗湖区", "线上"],
   grade: ["全部年级", "小学", "初中", "高中", "大学", "兴趣课"],
-  subject: ["全部科目", "数学", "英语", "语文", "物理", "化学", "全科", "编程"],
-  settlement: ["结算方式", "课结", "日结", "周结", "月结"]
+  settlement: ["结算方式", "课结", "日结", "周结", "月结"],
+  sort: ["最新发布", "课酬从低到高", "课酬从高到低"]
 };
 
 Page({
@@ -25,10 +25,10 @@ Page({
     query: "",
     jobs: [],
     filteredJobs: [],
-    quickSubjects: [{ label: "数学", icon: "数" }, { label: "英语", icon: "英" }, { label: "物理", icon: "物" }, { label: "全科", icon: "全" }],
-    selectedSubject: "",
-    filterLabels: ["全市区", "全部年级", "全部科目", "结算方式"],
-    filterOptions: [FILTERS.district, FILTERS.grade, FILTERS.subject, FILTERS.settlement],
+    quickSubjects: [{ label: "数学", icon: "数", active: false }, { label: "英语", icon: "英", active: false }, { label: "语文", icon: "语", active: false }, { label: "物理", icon: "物", active: false }, { label: "化学", icon: "化", active: false }, { label: "全科", icon: "全", active: false }],
+    selectedSubjects: [],
+    filterLabels: ["全市区", "全部年级", "结算方式", "最新发布"],
+    filterOptions: [FILTERS.district, FILTERS.grade, FILTERS.settlement, FILTERS.sort],
     filterIndexes: [0, 0, 0, 0],
     resultCopy: "正在加载",
     platformOverview: null,
@@ -86,6 +86,8 @@ Page({
   },
 
   async loadData(showLoading = true) {
+    const loadSequence = (this._loadSequence || 0) + 1;
+    this._loadSequence = loadSequence;
     if (showLoading) this.setData({ loading: true, error: "" });
     try {
       // Refresh /auth/me whenever the home page becomes visible so an audit or
@@ -95,7 +97,7 @@ Page({
       const teacherProfile = account.teacherProfile || {};
       const teacherEligibility = api.getTeacherApplicationEligibility(teacherProfile);
       const type = activeRole === "TEACHER" ? "TEACHING_NEED" : "TEACHER_OFFER";
-      const requests = [api.listAllJobs({ type })];
+      const requests = [api.listAllJobs(this.buildJobQuery(type))];
       if (activeRole === "TEACHER") requests.push(api.listTeacherApplications());
       const [result, applications = []] = await Promise.all(requests);
       const applicationByJob = applications.reduce((map, item) => {
@@ -113,13 +115,14 @@ Page({
       });
       const parentProfile = account.parentProfile || {};
       const locationLabel = activeRole === "TEACHER"
-        ? (teacherProfile.serviceDistricts || []).join("、") || "服务区域未设置"
+        ? ((teacherProfile.serviceAreas || []).map((area) => area.district).filter(Boolean).join("、") || (teacherProfile.serviceDistricts || []).join("、") || "服务区域未设置")
         : [parentProfile.city, parentProfile.district].filter(Boolean).join(" · ") || "常用区域未设置";
       const verificationLabel = activeRole === "TEACHER"
         ? (!teacherProfile.submittedAt
           ? "教师资料尚未提交"
           : ({ APPROVED: "教师认证已通过", PENDING: "教师资料审核中", REJECTED: "教师资料需修改" }[teacherProfile.auditStatus] || "教师资料未完善"))
         : "家长用户";
+      if (loadSequence !== this._loadSequence) return false;
       this.setData({
         account,
         accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人",
@@ -136,6 +139,7 @@ Page({
       }, () => this.applyFilters());
       return true;
     } catch (error) {
+      if (loadSequence !== this._loadSequence) return false;
       this.setData({ loading: false, error: error.message || "数据加载失败", jobs: [], filteredJobs: [] });
       return false;
     }
@@ -151,11 +155,14 @@ Page({
   },
 
   handleSearch(event) {
-    this.setData({ query: event.detail.value }, () => this.applyFilters());
+    this.setData({ query: event.detail.value });
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.loadData(false), 350);
   },
 
   clearSearch() {
-    this.setData({ query: "" }, () => this.applyFilters());
+    clearTimeout(this._searchTimer);
+    this.setData({ query: "" }, () => this.loadData(false));
   },
 
   handleFilterChange(event) {
@@ -165,40 +172,50 @@ Page({
     const filterLabels = this.data.filterLabels.slice();
     filterIndexes[position] = selected;
     filterLabels[position] = this.data.filterOptions[position][selected];
-    this.setData({ filterIndexes, filterLabels }, () => this.applyFilters());
+    this.setData({ filterIndexes, filterLabels }, () => this.loadData(false));
   },
 
   chooseSubject(event) {
     const subject = event.currentTarget.dataset.subject;
-    this.setData({ selectedSubject: this.data.selectedSubject === subject ? "" : subject }, () => this.applyFilters());
+    const selectedSubjects = this.data.selectedSubjects.includes(subject)
+      ? this.data.selectedSubjects.filter((item) => item !== subject)
+      : [...this.data.selectedSubjects, subject];
+    const quickSubjects = this.data.quickSubjects.map((item) => ({ ...item, active: selectedSubjects.includes(item.label) }));
+    this.setData({ selectedSubjects, quickSubjects }, () => this.loadData(false));
   },
 
   resetFilters() {
     this.setData({
       query: "",
-      selectedSubject: "",
+      selectedSubjects: [],
+      quickSubjects: this.data.quickSubjects.map((item) => ({ ...item, active: false })),
       filterIndexes: [0, 0, 0, 0],
-      filterLabels: ["全市区", "全部年级", "全部科目", "结算方式"]
-    }, () => this.applyFilters());
+      filterLabels: ["全市区", "全部年级", "结算方式", "最新发布"]
+    }, () => this.loadData(false));
   },
 
   applyFilters() {
-    const { query, selectedSubject, filterIndexes, filterOptions, jobs } = this.data;
-    const district = filterOptions[0][filterIndexes[0]];
+    const { filterIndexes, filterOptions, jobs } = this.data;
     const gradeGroup = filterOptions[1][filterIndexes[1]];
-    const subject = filterOptions[2][filterIndexes[2]];
-    const settlement = filterOptions[3][filterIndexes[3]];
-    const keyword = query.trim().toLowerCase();
     const filteredJobs = jobs.filter((job) => {
-      const searchable = [job.title, job.district, job.area, job.subject, job.description].filter(Boolean).join("").toLowerCase();
-      return (!keyword || searchable.includes(keyword))
-        && (district === "全市区" || job.district === district)
-        && (gradeGroup === "全部年级" || this.matchesGrade(job.grade, gradeGroup))
-        && (subject === "全部科目" || job.subject === subject)
-        && (!selectedSubject || job.subject === selectedSubject)
-        && (settlement === "结算方式" || job.settlement === settlement);
+      return gradeGroup === "全部年级" || this.matchesGrade(job.grade, gradeGroup);
     });
     this.setData({ filteredJobs, resultCopy: `${filteredJobs.length} 条匹配结果` });
+  },
+
+  buildJobQuery(type) {
+    const { query, selectedSubjects, filterIndexes, filterOptions } = this.data;
+    const district = filterOptions[0][filterIndexes[0]];
+    const settlement = filterOptions[2][filterIndexes[2]];
+    const sort = ["LATEST", "PRICE_ASC", "PRICE_DESC"][filterIndexes[3]] || "LATEST";
+    return {
+      type,
+      keyword: query.trim() || undefined,
+      subjects: selectedSubjects.length ? selectedSubjects.join(",") : undefined,
+      district: district === "全市区" ? undefined : district,
+      settlement: settlement === "结算方式" ? undefined : settlement,
+      sort
+    };
   },
 
   matchesGrade(grade = "", group) {
@@ -281,12 +298,15 @@ Page({
     }
     wx.showModal({
       title: "确认申请",
-      content: `确认使用当前教师资料申请“${job.title}”？`,
+      content: `确认使用当前教师资料申请“${job.title}”？提交后可在平台内先沟通。`,
+      editable: true,
+      placeholderText: "可填写教学优势、可约时间或想确认的问题",
       confirmText: "提交申请",
       confirmColor: "#3478f6",
-      success: async ({ confirm }) => {
+      success: async ({ confirm, content }) => {
         if (!confirm || this.data.actionId) return;
-        const signature = `${id}:job-apply:`;
+        const coverLetter = String(content || "").trim().slice(0, 1000);
+        const signature = `${id}:job-apply:${coverLetter}`;
         if (!this._pendingApply || this._pendingApply.signature !== signature) {
           this._pendingApply = {
             signature,
@@ -295,7 +315,7 @@ Page({
         }
         this.setData({ actionId: id });
         try {
-          await api.applyJob(id, "", this._pendingApply.key);
+          await api.applyJob(id, coverLetter, this._pendingApply.key);
           this._pendingApply = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已提交", icon: "success" });

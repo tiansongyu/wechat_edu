@@ -29,7 +29,8 @@ Page({
     publisherActionLabel: "联系",
     publisherReviewSummary: null,
     publisherReviewError: "",
-    publisherReviewLoading: false
+    publisherReviewLoading: false,
+    teacherDetails: null
   },
 
   onLoad(options) {
@@ -83,9 +84,14 @@ Page({
         && teacherEligibility.canApply
         && (!currentApplication || currentApplication.status === "CANCELLED");
       const canContact = !isOwner && (
-        (job.type === "TEACHING_NEED" && activeRole === "TEACHER" && currentApplication && currentApplication.status === "ACCEPTED")
+        (job.type === "TEACHING_NEED" && activeRole === "TEACHER" && currentApplication && ["PENDING", "ACCEPTED"].includes(currentApplication.status))
         || (job.type === "TEACHER_OFFER" && activeRole === "PARENT" && job.status === "PUBLISHED")
       );
+      const rawTeacherDetails = job.type === "TEACHER_OFFER" && job.owner ? job.owner.teacherProfile || null : null;
+      const teacherDetails = rawTeacherDetails ? {
+        ...rawTeacherDetails,
+        availableTimesLabel: (rawTeacherDetails.availableTimes || []).join("、")
+      } : null;
       this.setData({
         account,
         activeRole,
@@ -109,6 +115,7 @@ Page({
         publisherReviewSummary: null,
         publisherReviewError: "",
         publisherReviewLoading: job.type === "TEACHER_OFFER",
+        teacherDetails,
         loading: false,
         error: "",
         refreshError: ""
@@ -162,12 +169,15 @@ Page({
     }
     wx.showModal({
       title: "确认申请",
-      content: "平台将使用你当前已通过审核的教师资料提交申请。",
+      content: "平台将使用你当前已通过审核的教师资料提交申请，并为双方创建站内沟通。",
+      editable: true,
+      placeholderText: "可填写教学优势、可约时间或想先确认的问题",
       confirmText: "提交申请",
       confirmColor: "#3478f6",
-      success: async ({ confirm }) => {
+      success: async ({ confirm, content }) => {
         if (!confirm || this.data.action) return;
-        const signature = `${this.data.job.id}:job-apply:`;
+        const coverLetter = String(content || "").trim().slice(0, 1000);
+        const signature = `${this.data.job.id}:job-apply:${coverLetter}`;
         if (!this._pendingApply || this._pendingApply.signature !== signature) {
           this._pendingApply = {
             signature,
@@ -176,7 +186,7 @@ Page({
         }
         this.setData({ action: "apply" });
         try {
-          await api.applyJob(this.data.job.id, "", this._pendingApply.key);
+          await api.applyJob(this.data.job.id, coverLetter, this._pendingApply.key);
           this._pendingApply = null;
           await this.loadData(false);
           wx.showToast({ title: "申请已提交", icon: "success" });
@@ -255,7 +265,7 @@ Page({
       this.switchViewerRole();
       return;
     }
-    if (activeRole === "TEACHER" && job.type === "TEACHING_NEED" && (!currentApplication || currentApplication.status !== "ACCEPTED")) {
+    if (activeRole === "TEACHER" && job.type === "TEACHING_NEED" && (!currentApplication || !["PENDING", "ACCEPTED"].includes(currentApplication.status))) {
       if (this.data.canApply) this.applyJob();
       else wx.showToast({ title: currentApplication ? this.data.applicationLabel : "该发布当前不可申请", icon: "none" });
       return;

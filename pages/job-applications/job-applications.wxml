@@ -106,6 +106,7 @@
         </view>
 
         <view class="application-card__actions" wx:if="{{item.status === 'PENDING'}}">
+          <button class="application-action application-action--message" data-id="{{item.id}}" bindtap="contactTeacher" loading="{{actionId === item.id && actionType === 'contact'}}" disabled="{{actionId || syncRequired}}">先沟通</button>
           <button
             class="application-action application-action--reject"
             data-id="{{item.id}}"
@@ -124,7 +125,7 @@
           >接受报名</button>
         </view>
         <view class="application-card__actions" wx:elif="{{item.status === 'ACCEPTED'}}">
-          <button class="application-action application-action--accept" data-id="{{item.id}}" bindtap="contactTeacher" loading="{{actionId === item.id && actionType === 'contact'}}" disabled="{{actionId}}">联系已录用老师</button>
+          <button class="application-action application-action--accept" data-id="{{item.id}}" bindtap="contactTeacher" loading="{{actionId === item.id && actionType === 'contact'}}" disabled="{{actionId}}">继续平台沟通</button>
         </view>
       </view>
     </view>

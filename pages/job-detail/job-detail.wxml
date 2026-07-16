@@ -17,6 +17,16 @@
         <view class="publisher-card__main"><view class="publisher-card__name-row"><text class="publisher-card__name">{{job.publisher}}</text><text class="publisher-card__verified">{{job.typeLabel}}</text></view><text class="publisher-card__role">{{job.createdLabel ? job.createdLabel + '发布' : '发布时间以平台记录为准'}}</text><view wx:if="{{job.type === 'TEACHER_OFFER'}}" class="publisher-card__reviews" bindtap="openPublisherReviews"><text wx:if="{{publisherReviewSummary}}">{{publisherReviewSummary.displayAverage !== null ? '★ ' + publisherReviewSummary.displayAverage : '☆ 评价积累中'}} · {{publisherReviewSummary.count}} 条真实合作评价 ›</text><text wx:elif="{{publisherReviewLoading}}">正在加载老师口碑...</text><text wx:else>{{publisherReviewError || '查看老师真实合作评价'}} ›</text></view></view>
         <view class="publisher-card__contact" bindtap="contactPublisher">{{publisherActionLabel}}</view>
       </view>
+      <view class="detail-card teacher-detail-card" wx:if="{{job.type === 'TEACHER_OFFER' && teacherDetails}}">
+        <text class="detail-card__title">老师详细资料</text>
+        <text class="teacher-detail-card__headline">{{teacherDetails.displayTitle || teacherDetails.bio || '认证老师'}}</text>
+        <text class="teacher-detail-card__meta">{{teacherDetails.school || '学校待补充'}} · {{teacherDetails.major || '专业待补充'}} · {{teacherDetails.education || '学历待补充'}} · {{teacherDetails.teachingYears || 0}} 年经验</text>
+        <view class="teacher-detail-card__tags"><text wx:for="{{teacherDetails.subjects}}" wx:key="*this">{{item}}</text><text wx:for="{{teacherDetails.serviceModes}}" wx:key="*this">{{item}}</text><text wx:for="{{teacherDetails.lessonFormats}}" wx:key="*this">{{item}}</text></view>
+        <view class="teacher-detail-row" wx:if="{{teacherDetails.teachingStyle}}"><text>教学方式</text><text>{{teacherDetails.teachingStyle}}</text></view>
+        <view class="teacher-detail-row" wx:if="{{teacherDetails.teachingAchievements}}"><text>教学成果</text><text>{{teacherDetails.teachingAchievements}}</text></view>
+        <view class="teacher-detail-row" wx:if="{{teacherDetails.examExperience}}"><text>课程经验</text><text>{{teacherDetails.examExperience}}</text></view>
+        <view class="teacher-detail-row" wx:if="{{teacherDetails.availableTimesLabel}}"><text>可约时间</text><text>{{teacherDetails.availableTimesLabel}}</text></view>
+      </view>
       <view class="detail-card">
         <text class="detail-card__title">详细说明</text><text class="detail-card__description">{{job.description}}</text>
         <view class="detail-info-row"><view class="detail-info-row__icon">◷</view><view><text class="detail-info-row__label">授课时间</text><text class="detail-info-row__value">{{job.schedule || '待沟通'}}</text></view></view>
@@ -32,7 +42,7 @@
       <button class="detail-action-icon" open-type="share">↗<text>分享</text></button>
       <button wx:if="{{canManageApplications}}" class="detail-apply" bindtap="manageApplications">管理报名</button>
       <button wx:elif="{{isOwner}}" class="detail-apply" loading="{{action === 'role'}}" bindtap="openMyPosts">{{ownerRoleMismatch ? (ownerRole === 'TEACHER' ? '切换老师版管理' : '切换家长版管理') : '管理发布'}}</button>
-      <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED' && currentApplication && currentApplication.status === 'ACCEPTED'}}" class="detail-apply" loading="{{action === 'contact'}}" bindtap="contactPublisher">联系发布人</button>
+      <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED' && currentApplication && (currentApplication.status === 'PENDING' || currentApplication.status === 'ACCEPTED')}}" class="detail-apply" loading="{{action === 'contact'}}" bindtap="contactPublisher">{{currentApplication.status === 'PENDING' ? '平台沟通' : '联系发布人'}}</button>
       <button wx:elif="{{activeRole === 'TEACHER' && job.type === 'TEACHING_NEED'}}" class="detail-apply {{canApply ? '' : 'detail-apply--pending'}}" loading="{{action === 'apply'}}" bindtap="applyJob">{{applicationActionLabel}}</button>
       <button wx:elif="{{viewerRoleMismatch}}" class="detail-apply" loading="{{action === 'role'}}" bindtap="switchViewerRole">{{expectedViewerRole === 'TEACHER' ? '切换老师版申请' : '切换家长版联系'}}</button>
       <button wx:else class="detail-apply {{canContact ? '' : 'detail-apply--pending'}}" loading="{{action === 'contact'}}" bindtap="contactPublisher">{{contactLabel}}</button>

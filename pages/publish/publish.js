@@ -28,6 +28,7 @@ Page({
     submitting: false,
     editingId: "",
     editingVersion: 0,
+    editingPublished: false,
     actionId: "",
     publishType: "need",
     form: { ...EMPTY_FORM },
@@ -71,6 +72,7 @@ Page({
         ...(editingStillVisible || !this.data.editingId ? {} : {
           editingId: "",
           editingVersion: 0,
+          editingPublished: false,
           form: { ...EMPTY_FORM },
           modeIndex: 0,
           isOnline: false,
@@ -190,12 +192,14 @@ Page({
         if (!confirm || this.data.submitting) return;
         this.setData({ submitting: true });
         try {
-          if (this.data.editingId) await api.updateJob(this.data.editingId, this.data.form, this.data.editingVersion);
-          else await api.createJob(this.data.form, this.data.publishType);
+          const result = this.data.editingId
+            ? await api.updateJob(this.data.editingId, this.data.form, this.data.editingVersion)
+            : await api.createJob(this.data.form, this.data.publishType);
           this.setData({
             form: { ...EMPTY_FORM },
             editingId: "",
             editingVersion: 0,
+            editingPublished: false,
             modeIndex: 0,
             isOnline: false,
             regionValue: DEFAULT_REGION,
@@ -204,7 +208,7 @@ Page({
             settlementIndex: 0
           });
           await this.loadData(false);
-          wx.showToast({ title: "已提交审核", icon: "success" });
+          wx.showToast({ title: result && result.revisionPending ? "修改申请已提交" : "已提交审核", icon: "success" });
         } catch (error) {
           wx.showToast({ title: error.message || "提交失败", icon: "none" });
         } finally {
@@ -216,7 +220,7 @@ Page({
 
   editPost(event) {
     const post = this.data.posts.find((item) => item.id === event.currentTarget.dataset.id);
-    if (!post || !["DRAFT", "PENDING", "REJECTED"].includes(post.status)) return;
+    if (!post || !["DRAFT", "PENDING", "REJECTED", "PUBLISHED"].includes(post.status) || post.pendingRevision) return;
     const isOnline = post.district === "线上";
     const regionValue = isOnline
       ? DEFAULT_REGION
@@ -227,6 +231,7 @@ Page({
     this.setData({
       editingId: post.id,
       editingVersion: post.version,
+      editingPublished: post.status === "PUBLISHED",
       form: {
         title: post.title || "",
         province: post.province || "",
@@ -260,6 +265,7 @@ Page({
     this.setData({
       editingId: "",
       editingVersion: 0,
+      editingPublished: false,
       form: { ...EMPTY_FORM },
       modeIndex: 0,
       isOnline: false,

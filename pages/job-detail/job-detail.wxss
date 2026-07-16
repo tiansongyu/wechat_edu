@@ -497,3 +497,12 @@
 .cancel-application { margin-top: 24rpx; color: #c04f4f; font-size: 24rpx; background: #fff1f1; border-radius: 20rpx; }
 @keyframes detail-spin { to { transform: rotate(360deg); } }
 @media (max-width: 340px) { .detail-hero__price-row { align-items: flex-start; flex-direction: column; } .process-step text { font-size: 18rpx; } }
+
+.teacher-detail-card__headline { display: block; margin-top: 18rpx; color: #2d3a53; font-size: 26rpx; font-weight: 700; line-height: 1.55; }
+.teacher-detail-card__meta { display: block; margin-top: 10rpx; color: #7f8999; font-size: 20rpx; line-height: 1.55; }
+.teacher-detail-card__tags { display: flex; flex-wrap: wrap; gap: 10rpx; margin-top: 16rpx; }
+.teacher-detail-card__tags text { padding: 8rpx 13rpx; color: #3478f6; font-size: 18rpx; background: #edf4ff; border-radius: 999rpx; }
+.teacher-detail-row { margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #eef1f5; }
+.teacher-detail-row text { display: block; }
+.teacher-detail-row text:first-child { color: #536078; font-size: 20rpx; font-weight: 700; }
+.teacher-detail-row text:last-child { margin-top: 7rpx; color: #737e91; font-size: 21rpx; line-height: 1.7; }

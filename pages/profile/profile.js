@@ -74,6 +74,7 @@ Page({
     showNicknameEditor: false,
     nicknameDraft: "",
     savingNickname: false,
+    avatarUploading: false,
     activeRole: "PARENT",
     roleName: "家长版",
     profileMeta: "资料未完善",
@@ -95,7 +96,12 @@ Page({
     settings: { jobNotice: true, chatNotice: true, privacyMode: true },
     showParentEditor: false,
     parentRegion: DEFAULT_REGION,
-    parentForm: { province: "", city: "", district: "", address: "", latitude: "", longitude: "" },
+    parentForm: {
+      province: "", city: "", district: "", address: "", latitude: "", longitude: "",
+      studentNickname: "", studentGender: "", studentGrade: "", schoolName: "",
+      currentLevel: "", targetGoal: "", weakSubjects: "", learningGoals: "",
+      learningStyle: "", personalityNotes: "", preferredSchedule: "", tutorExpectations: ""
+    },
     savingParent: false
   },
 
@@ -203,6 +209,18 @@ Page({
           address: parentProfile.address || "",
           latitude: parentProfile.latitude === null || parentProfile.latitude === undefined ? "" : parentProfile.latitude,
           longitude: parentProfile.longitude === null || parentProfile.longitude === undefined ? "" : parentProfile.longitude
+          ,studentNickname: parentProfile.studentNickname || "",
+          studentGender: parentProfile.studentGender || "",
+          studentGrade: parentProfile.studentGrade || "",
+          schoolName: parentProfile.schoolName || "",
+          currentLevel: parentProfile.currentLevel || "",
+          targetGoal: parentProfile.targetGoal || "",
+          weakSubjects: (parentProfile.weakSubjects || []).join("、"),
+          learningGoals: (parentProfile.learningGoals || []).join("、"),
+          learningStyle: parentProfile.learningStyle || "",
+          personalityNotes: parentProfile.personalityNotes || "",
+          preferredSchedule: (parentProfile.preferredSchedule || []).join("、"),
+          tutorExpectations: parentProfile.tutorExpectations || ""
         },
         loading: false,
         error: ""
@@ -227,6 +245,7 @@ Page({
       status: item.status,
       statusLabel: APPLICATION_STATUS[item.status] || item.status,
       statusNote: item.statusNote || item.note || "",
+      conversationId: item.conversationId || (item.conversation && item.conversation.id) || "",
       recordType: "application"
     };
   },
@@ -335,6 +354,50 @@ Page({
       wx.showToast({ title: error.message || "昵称保存失败", icon: "none" });
     } finally {
       this.setData({ savingNickname: false });
+    }
+  },
+
+  async chooseAvatar(event) {
+    const filePath = event.detail && event.detail.avatarUrl;
+    if (!filePath || this.data.avatarUploading) return;
+    this.setData({ avatarUploading: true });
+    wx.showLoading({ title: "上传头像" });
+    try {
+      const fileInfo = await new Promise((resolve, reject) => {
+        wx.getFileSystemManager().getFileInfo({ filePath, success: resolve, fail: reject });
+      });
+      const lowerPath = String(filePath).toLowerCase();
+      const contentType = lowerPath.includes(".png") ? "image/png" : "image/jpeg";
+      const extension = contentType === "image/png" ? "png" : "jpg";
+      const signed = await api.createUploadUrl({
+        purpose: "AVATAR",
+        fileName: `wechat-avatar.${extension}`,
+        contentType,
+        size: fileInfo.size
+      });
+      const binary = await new Promise((resolve, reject) => {
+        wx.getFileSystemManager().readFile({ filePath, success: ({ data }) => resolve(data), fail: reject });
+      });
+      await new Promise((resolve, reject) => {
+        wx.request({
+          url: signed.uploadUrl,
+          method: "PUT",
+          data: binary,
+          header: { "content-type": contentType },
+          success: ({ statusCode }) => statusCode >= 200 && statusCode < 300 ? resolve() : reject(new Error("头像上传失败")),
+          fail: () => reject(new Error("文件服务连接失败"))
+        });
+      });
+      const account = await api.updateAccount({ avatarObjectKey: signed.objectKey });
+      this.setData({ account, accountInitial: account.nickname ? account.nickname.slice(0, 1) : "人" });
+      getApp().globalData.account = account;
+      wx.hideLoading();
+      wx.showToast({ title: "头像已更新", icon: "success" });
+    } catch (error) {
+      wx.hideLoading();
+      wx.showToast({ title: error.message || "头像更新失败", icon: "none" });
+    } finally {
+      this.setData({ avatarUploading: false });
     }
   },
 
@@ -461,6 +524,12 @@ Page({
   },
 
   closeParentEditor() { this.setData({ showParentEditor: false }); },
+  handleParentInput(event) {
+    this.setData({ [`parentForm.${event.currentTarget.dataset.field}`]: event.detail.value });
+  },
+  splitProfileList(value) {
+    return String(value || "").split(/[、,，\n]+/).map((item) => item.trim()).filter(Boolean);
+  },
   handleParentRegion(event) {
     const parentRegion = event.detail.value || DEFAULT_REGION;
     this.setData({
@@ -508,6 +577,18 @@ Page({
         address: form.address.trim() || undefined,
         latitude: form.latitude === "" ? undefined : Number(form.latitude),
         longitude: form.longitude === "" ? undefined : Number(form.longitude)
+        ,studentNickname: form.studentNickname.trim() || undefined,
+        studentGender: form.studentGender.trim() || undefined,
+        studentGrade: form.studentGrade.trim() || undefined,
+        schoolName: form.schoolName.trim() || undefined,
+        currentLevel: form.currentLevel.trim() || undefined,
+        targetGoal: form.targetGoal.trim() || undefined,
+        weakSubjects: this.splitProfileList(form.weakSubjects),
+        learningGoals: this.splitProfileList(form.learningGoals),
+        learningStyle: form.learningStyle.trim() || undefined,
+        personalityNotes: form.personalityNotes.trim() || undefined,
+        preferredSchedule: this.splitProfileList(form.preferredSchedule),
+        tutorExpectations: form.tutorExpectations.trim() || undefined
       });
       this.setData({ showParentEditor: false });
       await this.loadData(false);

@@ -438,6 +438,11 @@
   background: #fff1f0;
 }
 
+.application-action--message {
+  color: #3478f6;
+  background: #edf4ff;
+}
+
 .application-action--accept {
   color: #ffffff;
   background: linear-gradient(135deg, #3478f6, #6658e0);
