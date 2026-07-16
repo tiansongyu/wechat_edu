@@ -61,6 +61,7 @@ assert.equal(appConfig.requiredPrivateInfos.includes("chooseLocation"), true);
 
 const publishTemplate = fs.readFileSync(path.join(root, "pages/publish/publish.wxml"), "utf8");
 const profileTemplate = fs.readFileSync(path.join(root, "pages/profile/profile.wxml"), "utf8");
+const profileStyle = fs.readFileSync(path.join(root, "pages/profile/profile.wxss"), "utf8");
 const teacherTemplate = fs.readFileSync(path.join(root, "pages/teacher-profile/teacher-profile.wxml"), "utf8");
 const reviewsTemplate = fs.readFileSync(path.join(root, "pages/reviews/reviews.wxml"), "utf8");
 const applicationsTemplate = fs.readFileSync(path.join(root, "pages/job-applications/job-applications.wxml"), "utf8");
@@ -94,6 +95,11 @@ assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*82rpx;[^}]*min-width:\s
 assert.match(profileTemplate, /open-type="chooseAvatar"/);
 assert.match(profileSource, /purpose:\s*"AVATAR"/);
 assert.match(profileSource, /avatarObjectKey:\s*signed\.objectKey/);
+assert.match(profileTemplate, /profile-hero__title">我的成长档案/);
+assert.match(profileTemplate, /profile-identity-progress/);
+assert.match(profileTemplate, /profile-overview-card/);
+assert.doesNotMatch(profileTemplate, /credit-card|role-switch-card/, "profile header should use the compact unified overview");
+assert.match(profileStyle, /\.profile-avatar\s*\{[^}]*border-radius:\s*50%/s, "profile avatar should remain circular");
 assert.doesNotMatch(teacherTemplate, /data-field="serviceDistricts"/);
 assert.match(reviewsTemplate, /bindtap="selectRating"/);
 assert.match(reviewsTemplate, /bindtap="submitReview"/);

@@ -1,40 +1,73 @@
 <view class="page-with-tabbar profile-page">
   <view class="profile-hero">
-    <view class="profile-hero__glow"></view>
-    <view class="profile-user" wx:if="{{account}}"><button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" loading="{{avatarUploading}}"><image wx:if="{{account.avatarUrl}}" class="profile-avatar profile-avatar--image" src="{{account.avatarUrl}}" mode="aspectFill" /><view wx:else class="profile-avatar">{{accountInitial}}</view><text class="avatar-picker__badge">相机</text></button><view class="profile-user__main" bindtap="editNickname"><view class="profile-user__name-row"><text class="profile-user__name">{{account.nickname || '微信用户'}}</text><text class="profile-user__verified">{{roleName}}</text></view><text class="profile-user__meta">{{profileMeta}}</text></view><view class="profile-edit" bindtap="editNickname">修改昵称</view></view>
-    <view class="credit-card" bindtap="openReceivedReviews"><view><text class="credit-card__eyebrow">{{metricTitle}}</text><view class="credit-card__score-row"><text class="credit-card__score">{{metricValue}}</text></view></view><view class="credit-card__progress-wrap"><text class="credit-card__hint">{{metricHint}} →</text></view></view>
+    <view class="profile-hero__glow profile-hero__glow--primary"></view>
+    <view class="profile-hero__glow profile-hero__glow--secondary"></view>
+    <view class="profile-hero__heading">
+      <view><text class="profile-hero__kicker">PERSONAL CENTER</text><text class="profile-hero__title">我的成长档案</text></view>
+      <text class="profile-hero__role-chip">{{roleName}}</text>
+    </view>
+    <view class="profile-user" wx:if="{{account}}">
+      <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" loading="{{avatarUploading}}">
+        <image wx:if="{{account.avatarUrl}}" class="profile-avatar profile-avatar--image" src="{{account.avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="profile-avatar">{{accountInitial}}</view>
+        <text class="avatar-picker__badge">＋</text>
+      </button>
+      <view class="profile-user__main" bindtap="editNickname">
+        <view class="profile-user__name-row"><text class="profile-user__name">{{account.nickname || '微信用户'}}</text><text class="profile-user__verified">已登录</text></view>
+        <text class="profile-user__meta">{{profileMeta}}</text>
+      </view>
+      <view class="profile-edit" bindtap="editNickname">编辑 ›</view>
+    </view>
+    <view class="profile-identity-progress" wx:if="{{account}}" bindtap="improveProfile" hover-class="profile-identity-progress--pressed">
+      <view class="profile-identity-progress__dot"></view>
+      <view class="profile-identity-progress__main">
+        <text class="profile-identity-progress__label">资料状态</text>
+        <text class="profile-identity-progress__copy">{{identityHint}}</text>
+      </view>
+      <text class="profile-identity-progress__action">{{activeRole === 'TEACHER' ? '认证资料' : '完善资料'}} ›</text>
+    </view>
   </view>
   <view class="profile-content">
     <view class="profile-state" wx:if="{{loading}}"><view class="profile-spinner"></view><text>正在加载个人数据...</text></view>
-    <view class="profile-state" wx:elif="{{error}}"><text class="profile-state__title">加载失败</text><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
+    <view class="profile-state" wx:elif="{{error}}"><text class="profile-state__title">加载失败</text><text>{{error}}</text><button class="profile-state__retry" bindtap="retry">重新加载</button></view>
     <block wx:else>
       <view class="profile-warning" wx:if="{{warning}}"><view class="profile-warning__icon">!</view><text class="profile-warning__copy">{{warning}}</text><text class="profile-warning__retry" bindtap="retry">重新同步</text></view>
-      <view class="role-switch-card" bindtap="switchRole" hover-class="role-switch-card--pressed"><view class="role-switch-card__icon">{{activeRole === 'TEACHER' ? '🎓' : '⌂'}}</view><view class="role-switch-card__main"><text class="role-switch-card__title">当前使用{{roleName}}</text><text class="role-switch-card__copy">{{activeRole === 'TEACHER' ? '浏览需求并管理申请，业务操作仍需再次确认' : '发布需求并处理报名，切换不会自动执行操作'}}</text></view><text class="role-switch-card__action">{{actionId === 'role' ? '切换中' : '切换 ›'}}</text></view>
+      <view class="profile-overview-card">
+        <view class="profile-overview-item" bindtap="openReceivedReviews" hover-class="profile-overview-item--pressed">
+          <view class="profile-overview-item__icon profile-overview-item__icon--star">★</view>
+          <view class="profile-overview-item__main"><text class="profile-overview-item__label">合作口碑</text><text class="profile-overview-item__value">{{metricValue}}</text><text class="profile-overview-item__hint">{{reviewSummaryUnavailable ? '点击重试查看' : '查看 ' + (receivedReviewSummary.count || 0) + ' 条评价'}} ›</text></view>
+        </view>
+        <view class="profile-overview-divider"></view>
+        <view class="profile-overview-item" bindtap="switchRole" hover-class="profile-overview-item--pressed">
+          <view class="profile-overview-item__icon profile-overview-item__icon--role">{{activeRole === 'TEACHER' ? '师' : '家'}}</view>
+          <view class="profile-overview-item__main"><text class="profile-overview-item__label">当前身份</text><text class="profile-overview-item__value">{{roleName}}</text><text class="profile-overview-item__hint">{{actionId === 'role' ? '切换中' : '切换至' + (activeRole === 'TEACHER' ? '家长版' : '老师版')}} ›</text></view>
+        </view>
+      </view>
       <scroll-view class="stats-scroll" scroll-x enhanced show-scrollbar="false"><view class="stats-card stats-card--four"><view class="stat-item {{activePanel === 'applications' ? 'stat-item--active' : ''}}" data-panel="applications" bindtap="selectPanel"><text class="stat-item__value">{{applications.length}}</text><text class="stat-item__label">报名</text></view><view class="stat-item {{activePanel === 'favorites' ? 'stat-item--active' : ''}}" data-panel="favorites" bindtap="selectPanel"><text class="stat-item__value">{{favorites.length}}</text><text class="stat-item__label">收藏</text></view><view class="stat-item {{activePanel === 'posts' ? 'stat-item--active' : ''}}" data-panel="posts" bindtap="selectPanel"><text class="stat-item__value">{{posts.length}}</text><text class="stat-item__label">发布</text></view><view class="stat-item {{activePanel === 'appointments' ? 'stat-item--active' : ''}}" data-panel="appointments" bindtap="selectPanel"><text class="stat-item__value">{{appointments.length}}</text><text class="stat-item__label">预约</text></view></view></scroll-view>
       <view class="profile-section"><view class="profile-section__head"><text class="profile-section__title">{{panelTitle}}</text><text class="profile-section__more">共 {{visibleItems.length}} 条</text></view>
         <view class="profile-item" wx:for="{{visibleItems}}" wx:key="id" data-id="{{item.id}}" bindtap="openItem"><view class="profile-item__icon">{{activePanel === 'applications' ? '申' : activePanel === 'favorites' ? '♡' : activePanel === 'posts' ? '发' : '约'}}</view><view class="profile-item__main"><text class="profile-item__title">{{item.title}}</text><text class="profile-item__meta">{{item.meta || item.locationLabel || ''}}</text><text class="profile-item__note" wx:if="{{item.workflowHint || item.statusNote}}">{{item.workflowHint || item.statusNote}}</text></view><text class="profile-item__status">{{item.statusLabel || '查看'}}</text>
           <button wx:if="{{activePanel === 'applications' && activeRole === 'TEACHER' && item.status === 'PENDING'}}" class="inline-danger" data-id="{{item.id}}" catchtap="cancelApplication">{{actionId === item.id ? '处理中' : '取消'}}</button>
-          <view class="appointment-actions" wx:if="{{activePanel === 'appointments' && (item.canConfirm || item.canComplete || item.canReview || item.myReview || item.canCancel || item.canDispute)}}"><button wx:if="{{item.canConfirm}}" data-id="{{item.id}}" data-action="confirm" catchtap="appointmentAction">确认预约</button><button wx:if="{{item.canComplete}}" data-id="{{item.id}}" data-action="complete" catchtap="appointmentAction">确认完成</button><button wx:if="{{item.canReview}}" class="review" data-id="{{item.id}}" catchtap="goReview">去评价</button><button wx:elif="{{item.myReview}}" data-id="{{item.id}}" catchtap="goReview">查看评价</button><button wx:if="{{item.canDispute}}" class="danger" data-id="{{item.id}}" data-action="dispute" catchtap="appointmentAction">发起争议</button><button wx:if="{{item.canCancel}}" class="danger" data-id="{{item.id}}" data-action="cancel" catchtap="appointmentAction">取消预约</button></view>
+          <view class="appointment-actions" wx:if="{{activePanel === 'appointments' && (item.canConfirm || item.canComplete || item.canReview || item.myReview || item.canCancel || item.canDispute)}}"><button class="appointment-action" wx:if="{{item.canConfirm}}" data-id="{{item.id}}" data-action="confirm" catchtap="appointmentAction">确认预约</button><button class="appointment-action" wx:if="{{item.canComplete}}" data-id="{{item.id}}" data-action="complete" catchtap="appointmentAction">确认完成</button><button wx:if="{{item.canReview}}" class="appointment-action appointment-action--review" data-id="{{item.id}}" catchtap="goReview">去评价</button><button class="appointment-action" wx:elif="{{item.myReview}}" data-id="{{item.id}}" catchtap="goReview">查看评价</button><button wx:if="{{item.canDispute}}" class="appointment-action appointment-action--danger" data-id="{{item.id}}" data-action="dispute" catchtap="appointmentAction">发起争议</button><button wx:if="{{item.canCancel}}" class="appointment-action appointment-action--danger" data-id="{{item.id}}" data-action="cancel" catchtap="appointmentAction">取消预约</button></view>
         </view>
         <view class="profile-empty" wx:if="{{!visibleItems.length}}"><view class="profile-empty__icon">✦</view><text>这里暂时没有{{panelTitle}}，有新动态会及时出现</text></view>
       </view>
       <view class="menu-card"><view class="menu-item" bindtap="improveProfile"><view class="menu-item__icon menu-item__icon--blue">▤</view><view class="menu-item__main"><text class="menu-item__title">身份与匹配资料</text><text class="menu-item__copy">{{identityHint}}</text></view><text class="menu-item__arrow">›</text></view><view class="menu-item" bindtap="openReceivedReviews"><view class="menu-item__icon menu-item__icon--green">★</view><view class="menu-item__main"><text class="menu-item__title">我的合作评价</text><text class="menu-item__copy">{{reviewSummaryUnavailable ? '评价暂不可用，点击重试' : '当前' + roleName + '已收到 ' + (receivedReviewSummary.count || 0) + ' 条真实评价'}}</text></view><text class="menu-item__arrow">›</text></view><view class="menu-item" bindtap="toggleSettings"><view class="menu-item__icon menu-item__icon--purple">⚙</view><view class="menu-item__main"><text class="menu-item__title">通知与隐私偏好</text><text class="menu-item__copy">设置会同步保存到账号</text></view><text class="menu-item__arrow">{{showSettings ? '⌃' : '›'}}</text></view></view>
       <view class="settings-card" wx:if="{{showSettings}}"><view class="setting-row"><view><text class="setting-row__title">业务状态提醒</text><text class="setting-row__copy">接收审核、报名和预约状态通知</text></view><switch color="#3478f6" checked="{{settings.jobNotice}}" data-field="jobNotice" bindchange="updateSetting" /></view><view class="setting-row"><view><text class="setting-row__title">会话未读提示</text><text class="setting-row__copy">在消息页显示未读会话数量</text></view><switch color="#3478f6" checked="{{settings.chatNotice}}" data-field="chatNotice" bindchange="updateSetting" /></view><view class="setting-row"><view><text class="setting-row__title">地址隐私保护</text><text class="setting-row__copy">匹配成功前隐藏详细地址并降低地图精度</text></view><switch color="#3478f6" checked="{{settings.privacyMode}}" data-field="privacyMode" bindchange="updateSetting" /></view></view>
       <view class="parent-editor" wx:if="{{showParentEditor}}">
-        <view class="parent-editor__head"><view><text>完善学生与家长资料</text><text class="parent-editor__subtitle">详细资料仅用于匹配，敏感地址按隐私设置展示</text></view><text bindtap="closeParentEditor">关闭</text></view>
-        <picker mode="region" value="{{parentRegion}}" bindchange="handleParentRegion"><view class="parent-location-control"><view><text>常用省 / 市 / 区</text><text>{{parentForm.district ? parentForm.province + ' · ' + parentForm.city + ' · ' + parentForm.district : '使用滚动控件选择'}}</text></view><text>⌄</text></view></picker>
-        <view class="parent-location-control" bindtap="chooseParentLocation"><view><text>常用详细地点</text><text>{{parentForm.address || '输入地点名称并从地图搜索结果选择'}}</text></view><text>›</text></view>
-        <view class="parent-form-grid"><input value="{{parentForm.studentNickname}}" data-field="studentNickname" placeholder="学生称呼（建议使用昵称）" bindinput="handleParentInput" /><input value="{{parentForm.studentGender}}" data-field="studentGender" placeholder="学生性别（选填）" bindinput="handleParentInput" /></view>
-        <view class="parent-form-grid"><input value="{{parentForm.studentGrade}}" data-field="studentGrade" placeholder="所在年级" bindinput="handleParentInput" /><input value="{{parentForm.schoolName}}" data-field="schoolName" placeholder="学校（选填）" bindinput="handleParentInput" /></view>
-        <textarea value="{{parentForm.currentLevel}}" data-field="currentLevel" maxlength="255" placeholder="当前学习基础、成绩区间或主要困难" bindinput="handleParentInput"></textarea>
-        <textarea value="{{parentForm.targetGoal}}" data-field="targetGoal" maxlength="255" placeholder="目标成绩、考试或能力目标" bindinput="handleParentInput"></textarea>
-        <input value="{{parentForm.weakSubjects}}" data-field="weakSubjects" placeholder="薄弱科目：数学、英语（可多项）" bindinput="handleParentInput" />
-        <input value="{{parentForm.learningGoals}}" data-field="learningGoals" placeholder="学习目标：提分、预习、竞赛（可多项）" bindinput="handleParentInput" />
-        <input value="{{parentForm.learningStyle}}" data-field="learningStyle" placeholder="偏好方式：讲练结合 / 启发式等" bindinput="handleParentInput" />
-        <textarea value="{{parentForm.personalityNotes}}" data-field="personalityNotes" maxlength="500" placeholder="学生性格、沟通习惯与注意事项" bindinput="handleParentInput"></textarea>
-        <input value="{{parentForm.preferredSchedule}}" data-field="preferredSchedule" placeholder="可上课时间：周六上午、工作日晚间" bindinput="handleParentInput" />
-        <textarea value="{{parentForm.tutorExpectations}}" data-field="tutorExpectations" maxlength="1000" placeholder="对老师经验、授课方式与反馈频率的期望" bindinput="handleParentInput"></textarea>
-        <button loading="{{savingParent}}" bindtap="saveParentProfile">保存到平台数据库</button>
+        <view class="parent-editor__head"><view><text>完善学生与家长资料</text><text class="parent-editor__subtitle">详细资料仅用于匹配，敏感地址按隐私设置展示</text></view><text class="parent-editor__close" bindtap="closeParentEditor">关闭</text></view>
+        <picker mode="region" value="{{parentRegion}}" bindchange="handleParentRegion"><view class="parent-location-control"><view class="parent-location-control__main"><text class="parent-location-control__label">常用省 / 市 / 区</text><text class="parent-location-control__value">{{parentForm.district ? parentForm.province + ' · ' + parentForm.city + ' · ' + parentForm.district : '使用滚动控件选择'}}</text></view><text class="parent-location-control__arrow">⌄</text></view></picker>
+        <view class="parent-location-control" bindtap="chooseParentLocation"><view class="parent-location-control__main"><text class="parent-location-control__label">常用详细地点</text><text class="parent-location-control__value">{{parentForm.address || '输入地点名称并从地图搜索结果选择'}}</text></view><text class="parent-location-control__arrow">›</text></view>
+        <view class="parent-form-grid"><input class="parent-editor__input" value="{{parentForm.studentNickname}}" data-field="studentNickname" placeholder="学生称呼（建议使用昵称）" bindinput="handleParentInput" /><input class="parent-editor__input" value="{{parentForm.studentGender}}" data-field="studentGender" placeholder="学生性别（选填）" bindinput="handleParentInput" /></view>
+        <view class="parent-form-grid"><input class="parent-editor__input" value="{{parentForm.studentGrade}}" data-field="studentGrade" placeholder="所在年级" bindinput="handleParentInput" /><input class="parent-editor__input" value="{{parentForm.schoolName}}" data-field="schoolName" placeholder="学校（选填）" bindinput="handleParentInput" /></view>
+        <textarea class="parent-editor__textarea" value="{{parentForm.currentLevel}}" data-field="currentLevel" maxlength="255" placeholder="当前学习基础、成绩区间或主要困难" bindinput="handleParentInput"></textarea>
+        <textarea class="parent-editor__textarea" value="{{parentForm.targetGoal}}" data-field="targetGoal" maxlength="255" placeholder="目标成绩、考试或能力目标" bindinput="handleParentInput"></textarea>
+        <input class="parent-editor__input" value="{{parentForm.weakSubjects}}" data-field="weakSubjects" placeholder="薄弱科目：数学、英语（可多项）" bindinput="handleParentInput" />
+        <input class="parent-editor__input" value="{{parentForm.learningGoals}}" data-field="learningGoals" placeholder="学习目标：提分、预习、竞赛（可多项）" bindinput="handleParentInput" />
+        <input class="parent-editor__input" value="{{parentForm.learningStyle}}" data-field="learningStyle" placeholder="偏好方式：讲练结合 / 启发式等" bindinput="handleParentInput" />
+        <textarea class="parent-editor__textarea" value="{{parentForm.personalityNotes}}" data-field="personalityNotes" maxlength="500" placeholder="学生性格、沟通习惯与注意事项" bindinput="handleParentInput"></textarea>
+        <input class="parent-editor__input" value="{{parentForm.preferredSchedule}}" data-field="preferredSchedule" placeholder="可上课时间：周六上午、工作日晚间" bindinput="handleParentInput" />
+        <textarea class="parent-editor__textarea" value="{{parentForm.tutorExpectations}}" data-field="tutorExpectations" maxlength="1000" placeholder="对老师经验、授课方式与反馈频率的期望" bindinput="handleParentInput"></textarea>
+        <button class="parent-editor__submit" loading="{{savingParent}}" bindtap="saveParentProfile">保存到平台数据库</button>
       </view>
     </block>
   </view>
