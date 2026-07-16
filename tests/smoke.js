@@ -66,6 +66,9 @@ const reviewsTemplate = fs.readFileSync(path.join(root, "pages/reviews/reviews.w
 const applicationsTemplate = fs.readFileSync(path.join(root, "pages/job-applications/job-applications.wxml"), "utf8");
 const reviewsSource = fs.readFileSync(path.join(root, "pages/reviews/reviews.js"), "utf8");
 const homeTemplate = fs.readFileSync(path.join(root, "pages/index/index.wxml"), "utf8");
+const homeSource = fs.readFileSync(path.join(root, "pages/index/index.js"), "utf8");
+const homeStyle = fs.readFileSync(path.join(root, "pages/index/index.wxss"), "utf8");
+const profileSource = fs.readFileSync(path.join(root, "pages/profile/profile.js"), "utf8");
 const detailTemplate = fs.readFileSync(path.join(root, "pages/job-detail/job-detail.wxml"), "utf8");
 const mapTemplate = fs.readFileSync(path.join(root, "pages/map/map.wxml"), "utf8");
 const messagesTemplate = fs.readFileSync(path.join(root, "pages/messages/messages.wxml"), "utf8");
@@ -78,6 +81,19 @@ assert.match(profileTemplate, /input[^>]+type="nickname"/);
 assert.match(profileTemplate, /profile-warning/);
 assert.doesNotMatch(profileTemplate, /data-field="(?:city|district|address)"/);
 assert.match(teacherTemplate, /picker[^>]+mode="region"/);
+assert.ok(
+  homeTemplate.indexOf("search-section") < homeTemplate.indexOf("job-list"),
+  "search must render above tutoring results"
+);
+assert.match(homeTemplate, /bindinput="handleSearch"/);
+assert.match(homeTemplate, /data-subject="{{item\.label}}" bindtap="chooseSubject"/);
+assert.match(homeSource, /setTimeout\(\(\) => this\.loadData\(false\), 350\)/, "search must debounce API requests");
+assert.match(homeSource, /loadSequence !== this\._loadSequence/, "stale search responses must not overwrite newer results");
+assert.match(homeSource, /subjects: selectedSubjects\.length \? selectedSubjects\.join\(","\)/, "subject filters must support multiple values");
+assert.match(homeStyle, /\.icon-button\s*\{[^}]*width:\s*82rpx;[^}]*min-width:\s*82rpx;[^}]*height:\s*82rpx;/s, "favorite and share actions must remain square");
+assert.match(profileTemplate, /open-type="chooseAvatar"/);
+assert.match(profileSource, /purpose:\s*"AVATAR"/);
+assert.match(profileSource, /avatarObjectKey:\s*signed\.objectKey/);
 assert.doesNotMatch(teacherTemplate, /data-field="serviceDistricts"/);
 assert.match(reviewsTemplate, /bindtap="selectRating"/);
 assert.match(reviewsTemplate, /bindtap="submitReview"/);
@@ -98,7 +114,7 @@ for (const rolePage of ["pages/index/index.js", "pages/profile/profile.js", "pag
   assert.doesNotMatch(source, /api\.switchRole\(/, `${rolePage} must use the app-level single-flight role switch`);
   assert.match(source, /不会自动申请、联系、发布、取消或评价/, `${rolePage} must explain role-switch safety before confirming`);
 }
-assert.doesNotMatch(fs.readFileSync(path.join(root, "pages/profile/profile.js"), "utf8"), /teacherProfile\.score/);
+assert.doesNotMatch(profileSource, /teacherProfile\.score/);
 assert.doesNotMatch(fs.readFileSync(path.join(root, "pages/job-applications/job-applications.js"), "utf8"), /profile\.score/);
 assert.doesNotMatch(reviewsSource, /target\.label\.replace/, "review target labels must be treated as optional API data");
 assert.match(reviewsSource, /this\.data\.target\.role === "TEACHER"/, "pagination must be limited to public teacher review lists");
@@ -598,7 +614,7 @@ requestClient.request("/api/v1/conversations/00000000-0000-4000-8000-00000000000
     assert.equal(profilePage.data.showNicknameEditor, false);
     apiClient.updateAccount = originalUpdateAccount;
 
-    console.log("Smoke checks passed: database-only client flows, permission-aware location fallback, role-scoped resilient message rendering, stable chat retries, verified reviews and commands, nickname editing, valid empty JSON writes, 10 pages, and native tab bar.");
+    console.log("Smoke checks passed: debounced stale-safe search, multi-subject filters, square card actions, WeChat avatar upload wiring, database-only client flows, role-scoped chat, verified reviews and commands, nickname editing, 10 pages, and native tab bar.");
   })
   .catch((error) => {
     console.error(error);

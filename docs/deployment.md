@@ -116,7 +116,7 @@ RUN_DOCKER_PERSISTENCE_TEST=true npm --prefix backend run test:persistence
 1. 准备 Linux 服务器、域名、Docker Engine 和 Compose Plugin 2.24.4 以上版本。
 2. 将 `.env.example` 复制为 `.env`，替换所有 `change-me` 和默认密码。
 3. 设置 `WECHAT_APP_SECRET`；生产覆盖配置会强制关闭模拟登录，并禁止写入演示数据。
-4. 设置 `MINIO_PUBLIC_ENDPOINT` 为认证文件使用的公网 HTTPS 文件域名，同时设置 `MINIO_PUBLIC_PORT=443`、`MINIO_PUBLIC_USE_SSL=true`，并通过反向代理或对象存储网关转发到 MinIO。
+4. 设置 `MINIO_PUBLIC_ENDPOINT` 为 API 使用的公网 HTTPS 域名，同时设置 `MINIO_PUBLIC_PORT=443`、`MINIO_PUBLIC_USE_SSL=true`。仓库内 Nginx 已将同源 `/tutor-link/` 签名上传转发到 MinIO，并将只读头像 `/media/` 转发到公开头像前缀；认证材料仍为私有对象。
 5. 把证书保存为 `infra/nginx/certs/fullchain.pem` 和 `infra/nginx/certs/privkey.pem`；生产配置会启用 TLS 1.2/1.3 和 HTTP 到 HTTPS 跳转。
 6. 执行：
 
@@ -141,6 +141,7 @@ docker compose -f compose.yaml -f compose.production.yaml up -d --scale api=2 --
 - 数据库备份已执行恢复演练。
 - 使用 `tests/load/apply-concurrency.js` 完成压测。
 - `workflow-e2e` 与 `reviews-e2e` 已在目标数据库验证命令幂等、身份隔离及评价举报治理闭环。
+- `platform-expansion-e2e` 已验证 MinIO 头像、详细资料、省市区服务范围、搜索/多选筛选、发布修改审核、申请内沟通、确认合作和双向评价。
 - 管理后台默认密码已经修改。
 
 ## 备份建议

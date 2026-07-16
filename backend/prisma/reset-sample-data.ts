@@ -40,6 +40,7 @@ async function main() {
       applications,
       favorites,
       teacher_certifications,
+      job_revisions,
       job_posts,
       refresh_sessions,
       user_preferences,

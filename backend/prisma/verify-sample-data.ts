@@ -26,6 +26,7 @@ async function main() {
     ["teacherCertifications", prisma.teacherCertification.count()],
     ["userPreferences", prisma.userPreference.count()],
     ["jobs", prisma.jobPost.count()],
+    ["jobRevisions", prisma.jobRevision.count()],
     ["applications", prisma.application.count()],
     ["appointments", prisma.appointment.count()],
     ["reviews", prisma.review.count()],
@@ -49,6 +50,7 @@ async function main() {
     teacherCertifications: 0,
     userPreferences: 2,
     jobs: 1,
+    jobRevisions: 0,
     applications: 1,
     appointments: 1,
     reviews: 1,
@@ -109,6 +111,7 @@ async function main() {
   });
   assert.ok(conversation, "sample conversation must exist");
   assert.equal(conversation.jobId, JOB_ID);
+  assert.equal(conversation.applicationId, APPLICATION_ID);
   assert.equal(conversation.contextKey, CONVERSATION_CONTEXT_KEY);
   assert.deepEqual(
     conversation.members.map((member) => [member.accountId, member.role]),

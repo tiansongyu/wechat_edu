@@ -83,7 +83,14 @@ async function main() {
             district: "南山区",
             address: "深圳市南山区科技园",
             latitude: 22.54042,
-            longitude: 113.93457
+            longitude: 113.93457,
+            studentNickname: "小林",
+            studentGrade: "高一",
+            currentLevel: "数学基础中等，函数题容易丢分",
+            targetGoal: "稳定提升到班级前二十",
+            weakSubjects: ["数学"],
+            learningGoals: ["查漏补缺", "学习习惯"],
+            preferredSchedule: ["周六下午"]
           }
         }
       }
@@ -109,6 +116,13 @@ async function main() {
             hourlyRateCents: 20000,
             subjects: ["数学"],
             serviceDistricts: ["广东省 / 深圳市 / 南山区"],
+            serviceAreas: [{ province: "广东省", city: "深圳市", district: "南山区" }],
+            displayTitle: "初高中数学提分与习惯培养",
+            teachingStyle: "先诊断薄弱点，再用例题和复盘形成闭环。",
+            languages: ["普通话"],
+            availableTimes: ["周末下午"],
+            serviceModes: ["上门", "在线"],
+            lessonFormats: ["一对一"],
             auditStatus: AuditStatus.APPROVED,
             submittedAt: new Date(),
             score: 92
@@ -216,8 +230,8 @@ async function main() {
     });
     await prisma.conversation.upsert({
       where: { id: CONVERSATION_ID },
-      update: { jobId: JOB_ID, contextKey: CONVERSATION_CONTEXT_KEY },
-      create: { id: CONVERSATION_ID, jobId: JOB_ID, contextKey: CONVERSATION_CONTEXT_KEY }
+      update: { jobId: JOB_ID, applicationId: APPLICATION_ID, contextKey: CONVERSATION_CONTEXT_KEY },
+      create: { id: CONVERSATION_ID, jobId: JOB_ID, applicationId: APPLICATION_ID, contextKey: CONVERSATION_CONTEXT_KEY }
     });
     for (const member of [
       { accountId: PARENT_ID, role: RoleCode.PARENT },
